@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re  # Added for input validation
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
@@ -203,6 +204,15 @@ class PooledWorkflowRunListener:
         del self.events[subscription_id]
 
     async def subscribe(self, workflow_run_id: str) -> WorkflowRunEvent:
+        # Validate workflow_run_id
+        if not workflow_run_id or not isinstance(workflow_run_id, str):
+            raise ValueError("workflow_run_id must be a non-empty string")
+        
+        # Sanitize workflow_run_id to prevent injection attacks
+        # This validation allows for common ID formats including UUIDs
+        if not re.match(r'^[a-zA-Z0-9_\-:.]+$', workflow_run_id):
+            raise ValueError("workflow_run_id contains invalid characters")
+            
         subscription_id: int | None = None
 
         try:
