@@ -3,6 +3,9 @@ package worker
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
+	"strings"
 	"time"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -25,6 +28,11 @@ type ActionPayload struct {
 }
 
 func (w *Worker) RegisterWebhook(ww RegisterWebhookWorkerOpts) error {
+	// Validate the URL before registering the webhook
+	if err := isURLAllowed(ww.URL); err != nil {
+		return fmt.Errorf("invalid webhook URL during registration: %w", err)
+	}
+
 	tenantId := openapi_types.UUID{}
 	if err := tenantId.Scan(w.client.TenantId()); err != nil {
 		return fmt.Errorf("error getting tenant id: %w", err)
@@ -54,6 +62,11 @@ type WebhookWorkerOpts struct {
 
 // FIXME do not expose this to the end-user client somehow
 func (w *Worker) StartWebhook(ww WebhookWorkerOpts) (func() error, error) {
+	// Validate the URL when starting the webhook worker
+	if err := isURLAllowed(ww.URL); err != nil {
+		return nil, fmt.Errorf("invalid webhook URL when starting webhook: %w", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	listener, _, err := w.client.Dispatcher().GetActionListener(ctx, &client.GetActionListenerRequest{
 		WorkerName: w.name,
@@ -108,8 +121,82 @@ func (w *Worker) StartWebhook(ww WebhookWorkerOpts) (func() error, error) {
 	return cleanup, nil
 }
 
+// isURLAllowed checks if a URL is valid and allowed to be called
+func isURLAllowed(urlStr string) error {
+	// Parse the URL
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+	
+	// Check for http or https scheme
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("URL scheme must be http or https")
+	}
+	
+	// Check for empty host
+	if parsedURL.Host == "" {
+		return fmt.Errorf("URL host cannot be empty")
+	}
+	
+	// Extract hostname without port
+	hostname := parsedURL.Hostname()
+	
+	// Check for localhost, loopback, or unspecified addresses
+	lowerHost := strings.ToLower(hostname)
+	if lowerHost == "localhost" || 
+		strings.HasPrefix(lowerHost, "127.") || 
+		lowerHost == "::1" ||
+		lowerHost == "0.0.0.0" {
+		return fmt.Errorf("URL cannot point to localhost or loopback addresses")
+	}
+	
+	// Parse hostname as IP if possible
+	ip := net.ParseIP(hostname)
+	if ip != nil {
+		// Check for private IPv4 ranges
+		if ip4 := ip.To4(); ip4 != nil {
+			// Check for private IPv4 ranges
+			// 10.0.0.0/8
+			if ip4[0] == 10 {
+				return fmt.Errorf("URL cannot point to private IP ranges (10.0.0.0/8)")
+			}
+			// 172.16.0.0/12
+			if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+				return fmt.Errorf("URL cannot point to private IP ranges (172.16.0.0/12)")
+			}
+			// 192.168.0.0/16
+			if ip4[0] == 192 && ip4[1] == 168 {
+				return fmt.Errorf("URL cannot point to private IP ranges (192.168.0.0/16)")
+			}
+			// 169.254.0.0/16 (link-local)
+			if ip4[0] == 169 && ip4[1] == 254 {
+				return fmt.Errorf("URL cannot point to link-local IP ranges (169.254.0.0/16)")
+			}
+		} else {
+			// Check for private IPv6 ranges
+			// fd00::/8 (private)
+			if len(ip) == 16 && ip[0] == 0xfd {
+				return fmt.Errorf("URL cannot point to private IPv6 ranges (fd00::/8)")
+			}
+		}
+	}
+	
+	return nil
+}
+
 func (w *Worker) sendWebhook(ctx context.Context, action *client.Action, ww WebhookWorkerOpts) error {
 	w.l.Debug().Msgf("action received from step run %s, sending webhook at %s", action.StepRunId, time.Now())
+
+	// Validate the URL before sending the webhook
+	if err := isURLAllowed(ww.URL); err != nil {
+		errMsg := fmt.Errorf("invalid webhook URL: %w", err)
+		w.l.Warn().Msgf("step run %s has invalid webhook URL %s: %s", action.StepRunId, ww.URL, errMsg)
+		if markErr := w.markFailed(action, errMsg); markErr != nil {
+			return fmt.Errorf("invalid webhook URL and then could not send failed action event: %w", markErr)
+		}
+		return errMsg
+	}
 
 	actionWithPayload := ActionPayload{
 		Action:        action,
