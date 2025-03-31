@@ -62,10 +62,21 @@ func (r *HatchetRateLimiter) Limit(ctx context.Context) error {
 		return status.Errorf(codes.Internal, "no server in context")
 	}
 
-	rateLimitToken := ctx.Value("rate_limit_token").(string)
-
-	if rateLimitToken == "" {
+	// Safely extract the rate limit token
+	rateLimitTokenVal := ctx.Value("rate_limit_token")
+	if rateLimitTokenVal == nil {
 		return status.Errorf(codes.Unauthenticated, "no rate limit token found")
+	}
+
+	// Verify the token is a string
+	rateLimitToken, ok := rateLimitTokenVal.(string)
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "invalid rate limit token format")
+	}
+
+	// Check if the token is empty
+	if rateLimitToken == "" {
+		return status.Errorf(codes.Unauthenticated, "empty rate limit token")
 	}
 
 	switch matchServiceName(serviceName) {
