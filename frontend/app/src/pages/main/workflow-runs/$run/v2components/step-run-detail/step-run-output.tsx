@@ -62,15 +62,31 @@ const StepRunOutputRunning = () => {
 };
 
 const StepRunOutputSucceeded = ({ stepRun }: StepRunOutputProps) => {
-  return (
-    <CodeHighlighter
-      className="my-4 h-[400px] max-h-[400px] overflow-y-auto"
-      language="json"
-      maxHeight="400px"
-      minHeight="400px"
-      code={JSON.stringify(JSON.parse(stepRun?.output || '{}'), null, 2)}
-    />
-  );
+  try {
+    // Parse the output with a default empty object if it's null/undefined
+    const parsedOutput = stepRun?.output ? JSON.parse(stepRun.output) : {};
+    
+    // Implement a simple size check to prevent large payloads from being rendered
+    const outputStr = JSON.stringify(parsedOutput, null, 2);
+    const MAX_DISPLAY_SIZE = 500000; // ~500KB limit for display
+    
+    if (outputStr.length > MAX_DISPLAY_SIZE) {
+      return oneLiner(`Output is too large to display safely (${Math.round(outputStr.length/1024)}KB). Please download the raw output if needed.`);
+    }
+    
+    return (
+      <CodeHighlighter
+        className="my-4 h-[400px] max-h-[400px] overflow-y-auto"
+        language="json"
+        maxHeight="400px"
+        minHeight="400px"
+        code={outputStr}
+      />
+    );
+  } catch (error) {
+    // Handle parsing errors gracefully
+    return oneLiner(`Error parsing step output: ${error instanceof Error ? error.message : 'Invalid JSON'}`);
+  }
 };
 
 const StepRunOutputFailed = ({ stepRun }: StepRunOutputProps) => {
