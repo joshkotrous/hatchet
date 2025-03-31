@@ -19,7 +19,7 @@ import pprint
 import re  # noqa: F401
 from typing import Any, ClassVar, Dict, List, Optional, Set
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing_extensions import Self
 
 
@@ -42,6 +42,54 @@ class CreateEventRequest(BaseModel):
         validate_assignment=True,
         protected_namespaces=(),
     )
+
+    @field_validator('data', 'additional_metadata')
+    @classmethod
+    def validate_dict_content(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Validate dictionary content to prevent adversarial inputs."""
+        if v is None:
+            return v
+        
+        # Detect potentially harmful patterns
+        cls._validate_dict_recursively(v)
+        return v
+    
+    @classmethod
+    def _validate_dict_recursively(cls, value: Any, depth: int = 0, path: str = ""):
+        """Recursively validate values to prevent adversarial inputs."""
+        # Prevent excessive recursion
+        if depth > 20:  # Limit recursion depth
+            raise ValueError(f"Maximum nesting depth exceeded at: {path}")
+        
+        # Handle dictionaries
+        if isinstance(value, dict):
+            if len(value) > 1000:  # Limit dictionary size
+                raise ValueError(f"Dictionary too large at: {path}")
+            
+            for k, v in value.items():
+                # Validate key
+                if not isinstance(k, str):
+                    raise ValueError(f"Dictionary keys must be strings at: {path}")
+                if len(k) > 256:  # Limit key length
+                    raise ValueError(f"Dictionary key too long at: {path}")
+                
+                # Recursively validate value
+                new_path = f"{path}.{k}" if path else k
+                cls._validate_dict_recursively(v, depth + 1, new_path)
+        
+        # Handle lists
+        elif isinstance(value, list):
+            if len(value) > 10000:  # Limit list size
+                raise ValueError(f"List too large at: {path}")
+            
+            for i, item in enumerate(value):
+                new_path = f"{path}[{i}]"
+                cls._validate_dict_recursively(item, depth + 1, new_path)
+        
+        # Handle strings
+        elif isinstance(value, str):
+            if len(value) > 100000:  # Limit string length
+                raise ValueError(f"String too long at: {path}")
 
     def to_str(self) -> str:
         """Returns the string representation of the model using alias"""
