@@ -3,6 +3,7 @@ package cel
 import (
 	"crypto/sha256"
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
@@ -13,6 +14,13 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/v1/sqlcv1"
 
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+)
+
+// Constants for output validation
+const (
+	maxStringLength = 1024 * 10 // 10KB limit for string outputs
+	minInt          = -1 << 30  // Reasonable limit for integer values
+	maxInt          = 1 << 30   // Reasonable limit for integer values
 )
 
 type CELParser struct {
@@ -137,7 +145,12 @@ func (p *CELParser) ParseAndEvalWorkflowString(workflowExp string, in Input) (st
 	// Switch on the type of the output.
 	switch out.Type() {
 	case types.StringType:
-		return out.Value().(string), nil
+		result := out.Value().(string)
+		// Validate the string output
+		if err := validateStringOutput(result); err != nil {
+			return "", err
+		}
+		return result, nil
 	default:
 		return "", fmt.Errorf("output must evaluate to a string: got %s", out.Type().TypeName())
 	}
@@ -166,8 +179,24 @@ func (p *CELParser) ParseStepRun(stepRunExpr string) (cel.Program, error) {
 	return p.stepRunEnv.Program(ast)
 }
 
+// validateStringOutput performs security checks on string outputs
+func validateStringOutput(str string) error {
+	// Check string length
+	if len(str) > maxStringLength {
+		return fmt.Errorf("string output exceeds maximum allowed length: %d (max: %d)", len(str), maxStringLength)
+	}
+
+	// Ensure valid UTF-8
+	if !utf8.ValidString(str) {
+		return fmt.Errorf("string output contains invalid UTF-8 sequences")
+	}
+
+	return nil
+}
+
 func (p *CELParser) ParseAndEvalStepRun(stepRunExpr string, in Input) (*StepRunOut, error) {
-	prg, err := p.ParseWorkflowString(stepRunExpr)
+	// Use the correct parsing function for step run expressions
+	prg, err := p.ParseStepRun(stepRunExpr)
 	if err != nil {
 		return nil, err
 	}
@@ -184,16 +213,39 @@ func (p *CELParser) ParseAndEvalStepRun(stepRunExpr string, in Input) (*StepRunO
 	switch out.Type() {
 	case cel.StringType:
 		str := out.Value().(string)
+		// Validate string content
+		if err := validateStringOutput(str); err != nil {
+			return nil, fmt.Errorf("string output validation failed: %w", err)
+		}
 		res.String = &str
 		res.Type = StepRunOutTypeString
+
 	case cel.IntType:
-		i := int(out.Value().(int64))
+		i64 := out.Value().(int64)
+		// Validate integer range
+		if i64 < int64(minInt) || i64 > int64(maxInt) {
+			return nil, fmt.Errorf("integer output out of allowed range: %d (min: %d, max: %d)", 
+			    i64, minInt, maxInt)
+		}
+		i := int(i64)
 		res.Int = &i
 		res.Type = StepRunOutTypeInt
+
 	case cel.DoubleType:
-		i := int(out.Value().(float64))
+		f64 := out.Value().(float64)
+		// Check for non-finite values
+		if f64 != f64 /* NaN */ || f64+1 == f64 /* Infinity */ {
+			return nil, fmt.Errorf("float output is not finite: %f", f64)
+		}
+		// Validate float before conversion to int
+		if f64 < float64(minInt) || f64 > float64(maxInt) {
+			return nil, fmt.Errorf("float output out of allowed range for integer conversion: %f (min: %d, max: %d)", 
+			    f64, minInt, maxInt)
+		}
+		i := int(f64)
 		res.Int = &i
 		res.Type = StepRunOutTypeInt
+
 	default:
 		return nil, fmt.Errorf("output must evaluate to a string or integer: got %s", out.Type().TypeName())
 	}
