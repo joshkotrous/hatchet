@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -56,7 +58,7 @@ func init() {
 		&encryptionKeyDir,
 		"key-dir",
 		"",
-		"if storing keys on disk, path to the directory where encryption keys should be stored",
+		"path to the directory where encryption keys should be stored (required for security reasons)",
 	)
 
 	keysetCreateCloudKMSJWTCmd.PersistentFlags().StringVar(
@@ -74,47 +76,83 @@ func init() {
 	)
 }
 
+// safePath constructs a safe file path by joining the directory and filename,
+// preventing path traversal attacks.
+func safePath(dir, filename string) (string, error) {
+	// Get the absolute path to eliminate any relative path components
+	absDir, err := filepath.Abs(filepath.Clean(dir))
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+	
+	// Join the directory and filename using the OS-specific path separator
+	filePath := filepath.Join(absDir, filename)
+	
+	// Verify the resulting path is still under the intended directory
+	// This defends against filenames containing path traversal elements
+	if !strings.HasPrefix(filepath.Clean(filePath), absDir) {
+		return "", fmt.Errorf("invalid filename path traversal detected")
+	}
+	
+	return filePath, nil
+}
+
 func runCreateLocalKeysets() error {
+	if encryptionKeyDir == "" {
+		return fmt.Errorf("for security reasons, keys cannot be printed to standard output. Please provide a directory path using the --key-dir flag")
+	}
+
 	masterKeyBytes, privateEc256, publicEc256, err := encryption.GenerateLocalKeys()
 
 	if err != nil {
 		return err
 	}
 
-	if encryptionKeyDir != "" {
-		// we write these as .key files so that they're gitignored by default
-		err = os.WriteFile(encryptionKeyDir+"/master.key", masterKeyBytes, 0600)
-
-		if err != nil {
-			return err
-		}
-
-		err = os.WriteFile(encryptionKeyDir+"/private_ec256.key", privateEc256, 0600)
-
-		if err != nil {
-			return err
-		}
-
-		err = os.WriteFile(encryptionKeyDir+"/public_ec256.key", publicEc256, 0600)
-
-		if err != nil {
-			return err
-		}
-	} else {
-		fmt.Println("Master Key Bytes:")
-		fmt.Println(string(masterKeyBytes))
-
-		fmt.Println("Private EC256 Keyset:")
-		fmt.Println(string(privateEc256))
-
-		fmt.Println("Public EC256 Keyset:")
-		fmt.Println(string(publicEc256))
+	// Ensure the directory exists
+	if err := os.MkdirAll(encryptionKeyDir, 0700); err != nil {
+		return fmt.Errorf("failed to create key directory: %w", err)
 	}
 
+	// we write these as .key files so that they're gitignored by default
+	masterKeyPath, err := safePath(encryptionKeyDir, "master.key")
+	if err != nil {
+		return err
+	}
+	
+	err = os.WriteFile(masterKeyPath, masterKeyBytes, 0600)
+	if err != nil {
+		return err
+	}
+
+	privateKeyPath, err := safePath(encryptionKeyDir, "private_ec256.key")
+	if err != nil {
+		return err
+	}
+	
+	err = os.WriteFile(privateKeyPath, privateEc256, 0600)
+	if err != nil {
+		return err
+	}
+
+	publicKeyPath, err := safePath(encryptionKeyDir, "public_ec256.key")
+	if err != nil {
+		return err
+	}
+	
+	err = os.WriteFile(publicKeyPath, publicEc256, 0600)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Keys successfully written to %s\n", encryptionKeyDir)
 	return nil
 }
 
 func runCreateCloudKMSJWTKeyset() error {
+	if encryptionKeyDir == "" {
+		return fmt.Errorf("for security reasons, keys cannot be printed to standard output. Please provide a directory path using the --key-dir flag")
+	}
+
 	if cloudKMSCredentialsPath == "" {
 		return fmt.Errorf("missing required flag --credentials")
 	}
@@ -135,26 +173,32 @@ func runCreateCloudKMSJWTKeyset() error {
 		return err
 	}
 
-	if encryptionKeyDir != "" {
-		// we write these as .key files so that they're gitignored by default
-		err = os.WriteFile(encryptionKeyDir+"/private_ec256.key", privateEc256, 0600)
-
-		if err != nil {
-			return err
-		}
-
-		err = os.WriteFile(encryptionKeyDir+"/public_ec256.key", publicEc256, 0600)
-
-		if err != nil {
-			return err
-		}
-	} else {
-		fmt.Println("Private EC256 Keyset:")
-		fmt.Println(string(privateEc256))
-
-		fmt.Println("Public EC256 Keyset:")
-		fmt.Println(string(publicEc256))
+	// Ensure the directory exists
+	if err := os.MkdirAll(encryptionKeyDir, 0700); err != nil {
+		return fmt.Errorf("failed to create key directory: %w", err)
 	}
 
+	// we write these as .key files so that they're gitignored by default
+	privateKeyPath, err := safePath(encryptionKeyDir, "private_ec256.key")
+	if err != nil {
+		return err
+	}
+	
+	err = os.WriteFile(privateKeyPath, privateEc256, 0600)
+	if err != nil {
+		return err
+	}
+
+	publicKeyPath, err := safePath(encryptionKeyDir, "public_ec256.key")
+	if err != nil {
+		return err
+	}
+	
+	err = os.WriteFile(publicKeyPath, publicEc256, 0600)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Keys successfully written to %s\n", encryptionKeyDir)
 	return nil
 }
