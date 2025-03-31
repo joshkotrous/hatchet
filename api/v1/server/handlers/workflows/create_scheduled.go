@@ -30,7 +30,7 @@ func (t *WorkflowService) ScheduledWorkflowRunCreate(ctx echo.Context, request g
 
 	if err != nil {
 		return gen.ScheduledWorkflowRunCreate400JSONResponse(
-			apierrors.NewAPIErrors(err.Error()),
+			apierrors.NewAPIErrors("Failed to create scheduled workflow"),
 		), nil
 	}
 
