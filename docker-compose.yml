@@ -1,3 +1,9 @@
+# For production use, set the following environment variables:
+# - POSTGRES_USER
+# - POSTGRES_PASSWORD 
+# - POSTGRES_DB
+# - RABBITMQ_DEFAULT_USER
+# - RABBITMQ_DEFAULT_PASS
 version: "3.8"
 services:
   postgres:
@@ -5,23 +11,30 @@ services:
     command: postgres -c 'max_connections=500'
     restart: always
     environment:
-      - POSTGRES_USER=hatchet
-      - POSTGRES_PASSWORD=hatchet
-      - POSTGRES_DB=hatchet
+      - POSTGRES_USER=${POSTGRES_USER:-hatchet}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hatchet}
+      - POSTGRES_DB=${POSTGRES_DB:-hatchet}
     ports:
       - "5431:5432"
     volumes:
       - hatchet_postgres_data:/var/lib/postgresql/data
     shm_size: 4g
+    read_only: true
+    tmpfs:
+      /tmp: ""
+      /var/run/postgresql: ""
+      /var/log/postgresql: ""
   rabbitmq:
     image: "rabbitmq:3-management"
     hostname: "rabbitmq"
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "5672:5672" # RabbitMQ
       - "15672:15672" # Management UI
     environment:
-      RABBITMQ_DEFAULT_USER: "user"
-      RABBITMQ_DEFAULT_PASS: "password"
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_DEFAULT_USER:-user}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_DEFAULT_PASS:-password}"
     volumes:
       - "hatchet_rabbitmq_data:/var/lib/rabbitmq"
       - "hatchet_rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf" # Configuration file mount
