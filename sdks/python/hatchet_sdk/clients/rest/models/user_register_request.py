@@ -26,11 +26,19 @@ from typing_extensions import Self
 class UserRegisterRequest(BaseModel):
     """
     UserRegisterRequest
+    
+    WARNING: This model handles passwords in plain text for API requests.
+    To ensure security:
+    1. Always use secure connections (HTTPS) for transmission
+    2. Ensure proper server-side password hashing and storage
+    3. Avoid logging or displaying the password
     """  # noqa: E501
 
     name: StrictStr = Field(description="The name of the user.")
     email: StrictStr = Field(description="The email address of the user.")
-    password: StrictStr = Field(description="The password of the user.")
+    password: StrictStr = Field(
+        description="The password of the user. WARNING: Transmitted as plain text - ensure secure connection (HTTPS)."
+    )
     __properties: ClassVar[List[str]] = ["name", "email", "password"]
 
     model_config = ConfigDict(
@@ -41,7 +49,11 @@ class UserRegisterRequest(BaseModel):
 
     def to_str(self) -> str:
         """Returns the string representation of the model using alias"""
-        return pprint.pformat(self.model_dump(by_alias=True))
+        # Create a copy with obscured password for string representation
+        dict_repr = self.model_dump(by_alias=True).copy()
+        if 'password' in dict_repr:
+            dict_repr['password'] = '********'  # Obscured for security
+        return pprint.pformat(dict_repr)
 
     def to_json(self) -> str:
         """Returns the JSON representation of the model using alias"""
