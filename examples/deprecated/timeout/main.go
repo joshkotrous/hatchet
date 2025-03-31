@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -17,28 +19,31 @@ type sampleEvent struct{}
 type timeoutInput struct{}
 
 func main() {
-	err := godotenv.Load()
+	// Set up logging
+	logger := log.New(os.Stderr, "", log.LstdFlags)
 
+	// Load environment variables
+	err := godotenv.Load()
 	if err != nil {
-		panic(err)
+		logger.Fatalf("Failed to load environment variables: %v", err)
 	}
 
+	// Initialize client
 	client, err := client.New(
 		client.InitWorkflows(),
 	)
-
 	if err != nil {
-		panic(err)
+		logger.Fatalf("Failed to initialize client: %v", err)
 	}
 
+	// Initialize worker
 	worker, err := worker.NewWorker(
 		worker.WithClient(
 			client,
 		),
 	)
-
 	if err != nil {
-		panic(err)
+		logger.Fatalf("Failed to initialize worker: %v", err)
 	}
 
 	err = worker.RegisterAction("timeout:timeout", func(ctx context.Context, input *timeoutInput) (result any, err error) {
@@ -49,9 +54,8 @@ func main() {
 
 		return map[string]interface{}{}, nil
 	})
-
 	if err != nil {
-		panic(err)
+		logger.Fatalf("Failed to register action: %v", err)
 	}
 
 	interruptCtx, cancel := cmdutils.InterruptContextFromChan(cmdutils.InterruptChan())
@@ -59,7 +63,7 @@ func main() {
 
 	cleanup, err := worker.Start()
 	if err != nil {
-		panic(fmt.Errorf("error starting worker: %w", err))
+		logger.Fatalf("Error starting worker: %v", err)
 	}
 
 	event := sampleEvent{}
@@ -70,16 +74,17 @@ func main() {
 		"user:create",
 		event,
 	)
-
 	if err != nil {
-		panic(err)
+		logger.Printf("Error pushing event: %v", err)
+		// Non-critical error, continue execution
 	}
 
 	for {
 		select {
 		case <-interruptCtx.Done():
 			if err := cleanup(); err != nil {
-				panic(fmt.Errorf("error cleaning up: %w", err))
+				logger.Printf("Error cleaning up: %v", err)
+				os.Exit(1)
 			}
 			return
 		default:
