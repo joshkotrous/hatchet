@@ -15,7 +15,7 @@ type ConfigFile struct {
 	PostgresHost     string `mapstructure:"host" json:"host,omitempty" default:"127.0.0.1"`
 	PostgresPort     int    `mapstructure:"port" json:"port,omitempty" default:"5431"`
 	PostgresUsername string `mapstructure:"username" json:"username,omitempty" default:"hatchet"`
-	PostgresPassword string `mapstructure:"password" json:"password,omitempty" default:"hatchet"`
+	PostgresPassword string `mapstructure:"password" json:"password,omitempty"`
 	PostgresDbName   string `mapstructure:"dbName" json:"dbName,omitempty" default:"hatchet"`
 	PostgresSSLMode  string `mapstructure:"sslMode" json:"sslMode,omitempty" default:"disable"`
 
@@ -36,7 +36,7 @@ type ConfigFile struct {
 
 type SeedConfigFile struct {
 	AdminEmail    string `mapstructure:"adminEmail" json:"adminEmail,omitempty" default:"admin@example.com"`
-	AdminPassword string `mapstructure:"adminPassword" json:"adminPassword,omitempty" default:"Admin123!!"`
+	AdminPassword string `mapstructure:"adminPassword" json:"adminPassword,omitempty"`
 	AdminName     string `mapstructure:"adminName" json:"adminName,omitempty" default:"Admin"`
 
 	DefaultTenantName string `mapstructure:"defaultTenantName" json:"defaultTenantName,omitempty" default:"Default"`
