@@ -36,10 +36,23 @@ func InitTracer(opts *TracerOpts) (func(context.Context) error, error) {
 
 	var secureOption otlptracegrpc.Option
 
+	// Determine if the collector URL points to localhost
+	collectorHost := opts.CollectorURL
+	if idx := strings.Index(collectorHost, ":"); idx != -1 {
+		collectorHost = collectorHost[:idx]
+	}
+	isLocalhost := collectorHost == "localhost" || 
+	               collectorHost == "127.0.0.1" ||
+	               collectorHost == "::1"
+
 	if !opts.Insecure {
 		secureOption = otlptracegrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, ""))
-	} else {
+	} else if isLocalhost {
+		// Allow insecure connections for localhost
 		secureOption = otlptracegrpc.WithInsecure()
+	} else {
+		// For non-localhost destinations, enforce TLS
+		return nil, fmt.Errorf("insecure connections are only allowed for localhost; use TLS for external collectors")
 	}
 
 	exporter, err := otlptrace.New(
