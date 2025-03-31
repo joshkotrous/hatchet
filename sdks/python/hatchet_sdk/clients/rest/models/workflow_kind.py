@@ -35,4 +35,12 @@ class WorkflowKind(str, Enum):
     @classmethod
     def from_json(cls, json_str: str) -> Self:
         """Create an instance of WorkflowKind from a JSON string"""
-        return cls(json.loads(json_str))
+        value = json.loads(json_str)
+        if not isinstance(value, str):
+            raise TypeError(f"Expected string value, got {type(value).__name__}")
+        
+        valid_values = [e.value for e in cls]
+        if value not in valid_values:
+            raise ValueError(f"Invalid WorkflowKind value: {value}. Expected one of: {valid_values}")
+        
+        return cls(value)
