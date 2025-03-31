@@ -62,6 +62,33 @@ class StepRunEvent(BaseModel):
     payload: str
 
 
+def _validate_payload(payload: Any) -> str:
+    """
+    Validate that a payload is a string, or convert it to a string if safe.
+    
+    Args:
+        payload: The payload to validate
+        
+    Returns:
+        A validated string payload
+        
+    Raises:
+        ValueError: If the payload is an unsupported type
+    """
+    if payload is None:
+        return ""
+    
+    if isinstance(payload, str):
+        return payload
+    
+    # For security, we limit the types we'll auto-convert to string
+    if isinstance(payload, (int, float, bool)):
+        return str(payload)
+    
+    # For all other types, reject for security reasons
+    raise ValueError(f"Unsupported payload type: {type(payload)}")
+
+
 class RunEventListener:
     def __init__(
         self,
@@ -128,21 +155,34 @@ class RunEventListener:
                             raise Exception(
                                 f"Unknown event type: {workflow_event.eventType}"
                             )
-                        payload = None
-
+                        
+                        # Process payload with improved validation
+                        payload = ""
                         try:
                             if workflow_event.eventPayload:
-                                payload = json.loads(workflow_event.eventPayload)
-                        except Exception:
-                            payload = workflow_event.eventPayload
-                            pass
-
-                        assert isinstance(payload, str)
+                                parsed = json.loads(workflow_event.eventPayload)
+                                payload = _validate_payload(parsed)
+                            else:
+                                payload = ""
+                        except json.JSONDecodeError:
+                            # If JSON parsing fails, try to use the raw payload if it's a string
+                            if workflow_event.eventPayload and isinstance(workflow_event.eventPayload, str):
+                                payload = workflow_event.eventPayload
+                            else:
+                                payload = ""
+                        except ValueError as e:
+                            # Log validation error and use a safe default
+                            print(f"Payload validation error: {e}")
+                            payload = ""
+                        except Exception as e:
+                            # Catch-all for unexpected errors
+                            print(f"Unexpected error processing payload: {e}")
+                            payload = ""
 
                         yield StepRunEvent(type=eventType, payload=payload)
                     elif workflow_event.resourceType == RESOURCE_TYPE_WORKFLOW_RUN:
-                        if workflow_event.eventType in step_run_event_type_mapping:
-                            workflowRunEventType = step_run_event_type_mapping[
+                        if workflow_event.eventType in workflow_run_event_type_mapping:
+                            workflowRunEventType = workflow_run_event_type_mapping[
                                 workflow_event.eventType
                             ]
                         else:
@@ -150,15 +190,28 @@ class RunEventListener:
                                 f"Unknown event type: {workflow_event.eventType}"
                             )
 
-                        payload = None
-
+                        # Process payload with improved validation
+                        payload = ""
                         try:
                             if workflow_event.eventPayload:
-                                payload = json.loads(workflow_event.eventPayload)
-                        except Exception:
-                            pass
-
-                        assert isinstance(payload, str)
+                                parsed = json.loads(workflow_event.eventPayload)
+                                payload = _validate_payload(parsed)
+                            else:
+                                payload = ""
+                        except json.JSONDecodeError:
+                            # If JSON parsing fails, try to use the raw payload if it's a string
+                            if workflow_event.eventPayload and isinstance(workflow_event.eventPayload, str):
+                                payload = workflow_event.eventPayload
+                            else:
+                                payload = ""
+                        except ValueError as e:
+                            # Log validation error and use a safe default
+                            print(f"Payload validation error: {e}")
+                            payload = ""
+                        except Exception as e:
+                            # Catch-all for unexpected errors
+                            print(f"Unexpected error processing payload: {e}")
+                            payload = ""
 
                         yield StepRunEvent(type=workflowRunEventType, payload=payload)
 
