@@ -2,6 +2,7 @@ package workflows
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -12,8 +13,25 @@ import (
 )
 
 func (t *WorkflowService) WorkflowCronDelete(ctx echo.Context, request gen.WorkflowCronDeleteRequestObject) (gen.WorkflowCronDeleteResponseObject, error) {
-	_ = ctx.Get("tenant").(*dbsqlc.Tenant)
-	cron := ctx.Get("cron-workflow").(*dbsqlc.ListCronWorkflowsRow)
+	tenantVal := ctx.Get("tenant")
+	if tenantVal == nil {
+		return nil, errors.New("tenant not found in context")
+	}
+	
+	_, ok := tenantVal.(*dbsqlc.Tenant)
+	if !ok {
+		return nil, errors.New("invalid tenant type in context")
+	}
+	
+	cronVal := ctx.Get("cron-workflow")
+	if cronVal == nil {
+		return nil, errors.New("cron-workflow not found in context")
+	}
+	
+	cron, ok := cronVal.(*dbsqlc.ListCronWorkflowsRow)
+	if !ok {
+		return nil, errors.New("invalid cron-workflow type in context")
+	}
 
 	dbCtx, cancel := context.WithTimeout(ctx.Request().Context(), 30*time.Second)
 	defer cancel()
