@@ -6,6 +6,33 @@ import { cn } from '@/lib/utils';
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: '', dark: '.dark' } as const;
 
+// Function to validate and sanitize color input
+const sanitizeColor = (color: string | undefined): string | undefined => {
+  if (!color) return undefined;
+  
+  // Simple patterns that cover the most common valid CSS color formats
+  const safeColorPatterns = [
+    /^#([0-9A-Fa-f]{3}){1,2}$/, // Hex colors 
+    /^rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)$/, // RGB
+    /^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*[\d.]+\s*\)$/, // RGBA
+    /^hsl\(\s*\d+\s*,\s*\d+%\s*,\s*\d+%\s*\)$/, // HSL
+    /^hsla\(\s*\d+\s*,\s*\d+%\s*,\s*\d+%\s*,\s*[\d.]+\s*\)$/, // HSLA
+    /^var\(--[\w-]+\)$/, // CSS variables
+    /^[a-zA-Z]+$/ // Named colors
+  ];
+  
+  // Check if the color matches any safe pattern
+  const isSafeColor = safeColorPatterns.some(pattern => pattern.test(color));
+  
+  return isSafeColor ? color : undefined;
+};
+
+// Function to validate and sanitize ID
+const sanitizeId = (id: string): string => {
+  // Only allow alphanumeric characters, underscores, and hyphens
+  return id.replace(/[^a-zA-Z0-9_-]/g, '');
+};
+
 export type ChartConfig = {
   [k in string]: {
     label?: React.ReactNode;
@@ -66,6 +93,7 @@ const ChartContainer = React.forwardRef<
 ChartContainer.displayName = 'Chart';
 
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
+  const sanitizedId = sanitizeId(id);
   const colorConfig = Object.entries(config).filter(
     ([, config]) => config.theme || config.color,
   );
@@ -80,14 +108,16 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
         __html: Object.entries(THEMES)
           .map(
             ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
+${prefix} [data-chart=${sanitizedId}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
-    const color =
+    const unsanitizedColor =
       itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
       itemConfig.color;
+    const color = sanitizeColor(unsanitizedColor);
     return color ? `  --color-${key}: ${color};` : null;
   })
+  .filter(Boolean)
   .join('\n')}
 }
 `,
