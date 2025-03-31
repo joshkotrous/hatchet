@@ -28,9 +28,37 @@ const SupportChat: React.FC<PropsWithChildren & SupportChatProps> = ({
       return;
     }
 
-    const pylonScript = `(function(){var e=window;var t=document;var n=function(){n.e(arguments)};n.q=[];n.e=function(e){n.q.push(e)};e.Pylon=n;var r=function(){var e=t.createElement("script");e.setAttribute("type","text/javascript");e.setAttribute("async","true");e.setAttribute("src","https://widget.usepylon.com/widget/${APP_ID}");var n=t.getElementsByTagName("script")[0];n.parentNode.insertBefore(e,n)};if(t.readyState==="complete"){r()}else if(e.addEventListener){e.addEventListener("load",r,false)}})();`;
-    document.body.appendChild(document.createElement('script')).innerHTML =
-      pylonScript;
+    // Create a new script element
+    const scriptElement = document.createElement('script');
+    scriptElement.type = 'text/javascript';
+    
+    // Set the script content safely using textContent instead of innerHTML
+    scriptElement.textContent = `
+      (function(){
+        var e = window;
+        var t = document;
+        var n = function(){n.e(arguments)};
+        n.q = [];
+        n.e = function(e){n.q.push(e)};
+        e.Pylon = n;
+        var r = function(){
+          var e = t.createElement("script");
+          e.setAttribute("type","text/javascript");
+          e.setAttribute("async","true");
+          e.setAttribute("src","https://widget.usepylon.com/widget/${encodeURIComponent(APP_ID)}");
+          var n = t.getElementsByTagName("script")[0];
+          n.parentNode.insertBefore(e,n);
+        };
+        if(t.readyState==="complete"){
+          r();
+        } else if(e.addEventListener){
+          e.addEventListener("load",r,false);
+        }
+      })();
+    `;
+    
+    // Append the script to the document
+    document.body.appendChild(scriptElement);
   }, [APP_ID]);
 
   useEffect(() => {
