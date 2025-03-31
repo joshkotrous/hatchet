@@ -42,7 +42,13 @@ class UserChangePasswordRequest(BaseModel):
 
     def to_str(self) -> str:
         """Returns the string representation of the model using alias"""
-        return pprint.pformat(self.model_dump(by_alias=True))
+        # Create a copy of the data with masked sensitive fields
+        data = self.model_dump(by_alias=True)
+        if "password" in data:
+            data["password"] = "***REDACTED***"
+        if "newPassword" in data:
+            data["newPassword"] = "***REDACTED***"
+        return pprint.pformat(data)
 
     def to_json(self) -> str:
         """Returns the JSON representation of the model using alias"""
