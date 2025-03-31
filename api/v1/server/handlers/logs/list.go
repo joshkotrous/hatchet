@@ -1,7 +1,10 @@
 package logs
 
 import (
+	"fmt"
 	"math"
+	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -12,6 +15,23 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/postgres/dbsqlc"
 	"github.com/hatchet-dev/hatchet/pkg/repository/postgres/sqlchelpers"
 )
+
+// validateSearchParameter checks if the search parameter contains potentially dangerous SQL patterns
+func validateSearchParameter(search string) error {
+	// Pattern to catch common SQL injection attempts
+	dangerousPattern := `(?i)(--|;|\/\*|\*\/|@@|@|\bAND\b|\bOR\b|\bUNION\b|\bSELECT\b|\bFROM\b|\bWHERE\b|\bINSERT\b|\bUPDATE\b|\bDELETE\b|\bDROP\b|\bCREATE\b|\bALTER\b|\bTRUNCATE\b)`
+	
+	matched, err := regexp.MatchString(dangerousPattern, search)
+	if err != nil {
+		return err
+	}
+	
+	if matched {
+		return fmt.Errorf("search parameter contains potentially malicious patterns")
+	}
+	
+	return nil
+}
 
 func (t *LogService) LogLineList(ctx echo.Context, request gen.LogLineListRequestObject) (gen.LogLineListResponseObject, error) {
 	tenant := ctx.Get("tenant").(*dbsqlc.Tenant)
@@ -30,6 +50,9 @@ func (t *LogService) LogLineList(ctx echo.Context, request gen.LogLineListReques
 	}
 
 	if request.Params.Search != nil {
+		if err := validateSearchParameter(*request.Params.Search); err != nil {
+			return nil, echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		listOpts.Search = request.Params.Search
 	}
 
@@ -43,12 +66,34 @@ func (t *LogService) LogLineList(ctx echo.Context, request gen.LogLineListReques
 		listOpts.Levels = levels
 	}
 
+	// Define allowed order by fields
+	allowedOrderByFields := map[string]bool{
+		"timestamp": true,
+		"level":     true,
+		"message":   true,
+		// Add other valid fields as needed based on your database schema
+	}
+
+	// Define allowed order directions
+	allowedOrderDirections := map[string]bool{
+		"ASC":  true,
+		"DESC": true,
+	}
+
 	if request.Params.OrderByField != nil {
-		listOpts.OrderBy = repository.StringPtr(string(*request.Params.OrderByField))
+		fieldValue := string(*request.Params.OrderByField)
+		if allowedOrderByFields[fieldValue] {
+			listOpts.OrderBy = repository.StringPtr(fieldValue)
+		}
+		// Silently ignore invalid fields
 	}
 
 	if request.Params.OrderByDirection != nil {
-		listOpts.OrderDirection = repository.StringPtr(strings.ToUpper(string(*request.Params.OrderByDirection)))
+		directionValue := strings.ToUpper(string(*request.Params.OrderByDirection))
+		if allowedOrderDirections[directionValue] {
+			listOpts.OrderDirection = repository.StringPtr(directionValue)
+		}
+		// Silently ignore invalid directions
 	}
 
 	if request.Params.Limit != nil {
