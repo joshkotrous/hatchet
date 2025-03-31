@@ -34,13 +34,13 @@ func main() {
 	err := godotenv.Load()
 
 	if err != nil {
-		panic(err)
+		panic("Failed to load environment variables")
 	}
 
 	c, err := client.New()
 
 	if err != nil {
-		panic(err)
+		panic("Failed to initialize client")
 	}
 
 	w, err := worker.NewWorker(
@@ -50,7 +50,7 @@ func main() {
 	)
 
 	if err != nil {
-		panic(err)
+		panic("Failed to initialize worker")
 	}
 
 	// ,
@@ -76,7 +76,7 @@ func main() {
 	// ...
 
 	if err != nil {
-		panic(err)
+		panic("Failed to register workflow")
 	}
 
 	interruptCtx, cancel := cmdutils.InterruptContextFromChan(cmdutils.InterruptChan())
@@ -84,13 +84,13 @@ func main() {
 
 	cleanup, err := w.Start()
 	if err != nil {
-		panic(fmt.Errorf("error cleaning up: %w", err))
+		panic("Failed to start worker")
 	}
 
 	<-interruptCtx.Done()
 
 	if err := cleanup(); err != nil {
-		panic(fmt.Errorf("error cleaning up: %w", err))
+		panic("Failed to clean up worker resources")
 	}
 
 	// ,
