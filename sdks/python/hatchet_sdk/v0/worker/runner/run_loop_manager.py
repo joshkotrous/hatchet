@@ -83,13 +83,39 @@ class WorkerActionRunLoopManager:
 
         logger.debug(f"'{self.name}' waiting for {list(self.action_registry.keys())}")
         while not self.killing:
-            action: Action = await self._get_action()
+            action = await self._get_action()
             if action == STOP_LOOP:
                 logger.debug("stopping action runner loop...")
                 break
 
+            # Validate the action before running it
+            if not self._is_valid_action(action):
+                continue
+
             self.runner.run(action)
         logger.debug("action runner loop stopped")
+
+    def _is_valid_action(self, action) -> bool:
+        """
+        Validates that the action is safe to execute.
+        Returns True if the action is valid, False otherwise.
+        """
+        # Ensure action is an instance of Action
+        if not isinstance(action, Action):
+            logger.warning(f"Received invalid action type: {type(action)}, expected Action")
+            return False
+        
+        # Ensure action has a type that maps to a registered handler
+        try:
+            action_type = getattr(action, 'type', None)
+            if not action_type or action_type not in self.action_registry:
+                logger.warning(f"Unregistered action type: {action_type}")
+                return False
+        except Exception as e:
+            logger.error(f"Error validating action: {e}")
+            return False
+        
+        return True
 
     async def _get_action(self):
         return await self.loop.run_in_executor(None, self.action_queue.get)
