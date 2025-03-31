@@ -16,6 +16,18 @@ const readableReason = (reason?: string): string => {
   return reason ? reason.toLowerCase().split('_').join(' ') : '';
 };
 
+// Add a sanitization function to prevent ML model output manipulation
+const sanitizeErrorMessage = (errorMessage: string | null | undefined): string => {
+  if (typeof errorMessage !== 'string') {
+    return '';
+  }
+  
+  // Replace HTML tags with their encoded versions to prevent injection
+  return errorMessage
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+
 type StepRunOutputProps = {
   stepRun: StepRun;
   workflowRun: WorkflowRunShape;
@@ -86,9 +98,12 @@ const StepRunOutputFailed = ({ stepRun }: StepRunOutputProps) => {
     return oneLiner('Step run failed with no error message');
   }
 
+  // Sanitize the error message before rendering to prevent ML model output manipulation
+  const sanitizedError = sanitizeErrorMessage(stepRun.error);
+  
   return (
     <div className="my-4">
-      <StepRunCodeText text={stepRun.error} />
+      <StepRunCodeText text={sanitizedError} />
     </div>
   );
 };
@@ -126,9 +141,10 @@ export const V1StepRunOutput = (props: { taskRunId: string }) => {
     return null;
   }
 
+  // Sanitize error messages for failed tasks
   const outputData =
     (data.status === V1TaskStatus.FAILED
-      ? data.errorMessage
+      ? sanitizeErrorMessage(data.errorMessage)
       : JSON.stringify(data.output, null, 2)) || '';
 
   return (
