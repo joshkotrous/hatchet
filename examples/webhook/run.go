@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/hatchet-dev/hatchet/pkg/client"
@@ -46,11 +49,23 @@ func run(
 		}
 	}()
 
-	secret := "secret"
+	// Get webhook secret from environment variable
+	webhookSecret := os.Getenv("WEBHOOK_SECRET")
+	if webhookSecret == "" {
+		log.Printf("WARNING: WEBHOOK_SECRET environment variable not set. Generating random secret.")
+		
+		// Generate a secure random secret
+		randomBytes := make([]byte, 16)
+		if _, err := rand.Read(randomBytes); err != nil {
+			return fmt.Errorf("error generating random secret: %w", err)
+		}
+		webhookSecret = hex.EncodeToString(randomBytes)
+	}
+
 	if err := w.RegisterWebhook(worker.RegisterWebhookWorkerOpts{
 		Name:   "test-" + name,
 		URL:    fmt.Sprintf("http://localhost:%s/webhook", port),
-		Secret: &secret,
+		Secret: &webhookSecret,
 	}); err != nil {
 		return fmt.Errorf("error setting up webhook: %w", err)
 	}
