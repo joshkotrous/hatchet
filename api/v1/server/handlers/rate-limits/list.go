@@ -15,6 +15,25 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/postgres/sqlchelpers"
 )
 
+// validateSearchInput validates and sanitizes the search input
+func validateSearchInput(input string) (string, error) {
+    // Check for excessively long input
+    if len(input) > 200 {  // Arbitrary reasonable limit
+        return "", echo.NewHTTPError(400, "Search term too long")
+    }
+    
+    // Check for potentially harmful characters or patterns
+    harmfulPatterns := []string{"--", ";", "/*", "*/"}
+    
+    for _, pattern := range harmfulPatterns {
+        if strings.Contains(input, pattern) {
+            return "", echo.NewHTTPError(400, "Invalid search term")
+        }
+    }
+    
+    return input, nil
+}
+
 func (t *RateLimitService) RateLimitList(ctx echo.Context, request gen.RateLimitListRequestObject) (gen.RateLimitListResponseObject, error) {
 	tenant := ctx.Get("tenant").(*dbsqlc.Tenant)
 	tenantId := sqlchelpers.UUIDToStr(tenant.ID)
@@ -28,15 +47,36 @@ func (t *RateLimitService) RateLimitList(ctx echo.Context, request gen.RateLimit
 	}
 
 	if request.Params.Search != nil {
-		listOpts.Search = request.Params.Search
+		validatedSearch, err := validateSearchInput(*request.Params.Search)
+		if err != nil {
+			return nil, err
+		}
+		listOpts.Search = &validatedSearch
+	}
+
+	// Define allowed OrderByField values - these should be actual column names in the rate_limits table
+	allowedOrderByFields := map[string]bool{
+		"id":         true,
+		"name":       true,
+		"created_at": true,
+		"updated_at": true,
+		// Add other allowed column names as needed
 	}
 
 	if request.Params.OrderByField != nil {
-		listOpts.OrderBy = repository.StringPtr(string(*request.Params.OrderByField))
+		orderByField := string(*request.Params.OrderByField)
+		// Only set the order by field if it's in the whitelist
+		if allowedOrderByFields[orderByField] {
+			listOpts.OrderBy = repository.StringPtr(orderByField)
+		}
 	}
 
 	if request.Params.OrderByDirection != nil {
-		listOpts.OrderDirection = repository.StringPtr(strings.ToUpper(string(*request.Params.OrderByDirection)))
+		orderDirection := strings.ToUpper(string(*request.Params.OrderByDirection))
+		// Only set the order direction if it's ASC or DESC
+		if orderDirection == "ASC" || orderDirection == "DESC" {
+			listOpts.OrderDirection = repository.StringPtr(orderDirection)
+		}
 	}
 
 	if request.Params.Limit != nil {
