@@ -19,6 +19,9 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/postgres/dbsqlc"
 )
 
+// Maximum payload size to prevent DOS attacks (10MB)
+const maxPayloadSize = 10 * 1024 * 1024
+
 type PostgresMessageQueue struct {
 	repo repository.MessageQueueRepository
 	l    *zerolog.Logger
@@ -180,6 +183,12 @@ func (p *PostgresMessageQueue) Subscribe(queue msgqueue.Queue, preAck msgqueue.A
 	do := func(messages []*dbsqlc.ReadMessagesRow) error {
 		var errs error
 		for _, message := range messages {
+			// Check payload size before deserializing
+			if len(message.Payload) > maxPayloadSize {
+				p.l.Error().Int("size", len(message.Payload)).Msg("payload size exceeds limit")
+				continue
+			}
+
 			var task msgqueue.Message
 
 			err := json.Unmarshal(message.Payload, &task)
@@ -187,6 +196,7 @@ func (p *PostgresMessageQueue) Subscribe(queue msgqueue.Queue, preAck msgqueue.A
 			if err != nil {
 				p.l.Error().Err(err).Msg("error unmarshalling message")
 				errs = multierror.Append(errs, err)
+				continue
 			}
 
 			err = doTask(task, &message.ID)
@@ -233,6 +243,12 @@ func (p *PostgresMessageQueue) Subscribe(queue msgqueue.Queue, preAck msgqueue.A
 		err := p.repo.Listen(subscribeCtx, queue.Name(), func(ctx context.Context, notification *repository.PubMessage) error {
 			// if this is an exchange queue, and the message starts with JSON '{', then we process the message directly
 			if queue.FanoutExchangeKey() != "" && len(notification.Payload) >= 1 && notification.Payload[0] == '{' {
+				// Check payload size before deserializing
+				if len(notification.Payload) > maxPayloadSize {
+					p.l.Error().Int("size", len(notification.Payload)).Msg("payload size exceeds limit")
+					return nil
+				}
+
 				var task msgqueue.Message
 
 				err := json.Unmarshal([]byte(notification.Payload), &task)
