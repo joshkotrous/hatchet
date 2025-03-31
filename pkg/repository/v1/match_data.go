@@ -101,16 +101,38 @@ func (m *MatchData) DataValueAsTaskOutputEvent(key string) *TaskOutputEvent {
 }
 
 func NewMatchData(mcAggregatedData []byte) (*MatchData, error) {
-	var triggerDataMap map[string]map[string][]interface{}
+	const maxAllowedSize = 1 * 1024 * 1024 // 1 MB max size
 
-	if len(mcAggregatedData) > 0 {
-		err := json.Unmarshal(mcAggregatedData, &triggerDataMap)
-
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	if len(mcAggregatedData) == 0 {
 		return nil, fmt.Errorf("no match condition aggregated data")
+	}
+
+	if len(mcAggregatedData) > maxAllowedSize {
+		return nil, fmt.Errorf("input data exceeds maximum allowed size")
+	}
+
+	var triggerDataMap map[string]map[string][]interface{}
+	err := json.Unmarshal(mcAggregatedData, &triggerDataMap)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling data: %v", err)
+	}
+
+	// Validate the action keys and ensure non-empty values
+	validActions := map[string]bool{
+		"CREATE":       true,
+		"QUEUE":        true,
+		"CANCEL":       true,
+		"SKIP":         true,
+		"CREATE_MATCH": true,
+	}
+
+	for action, dataMap := range triggerDataMap {
+		if !validActions[action] {
+			return nil, fmt.Errorf("invalid action in trigger data: %s", action)
+		}
+		if dataMap == nil {
+			return nil, fmt.Errorf("nil data map for action: %s", action)
+		}
 	}
 
 	// look for any CREATE_MATCH data which should be merged into the match data
@@ -136,6 +158,8 @@ func NewMatchData(mcAggregatedData []byte) (*MatchData, error) {
 			action = sqlcv1.V1MatchConditionActionCANCEL
 		case "SKIP":
 			action = sqlcv1.V1MatchConditionActionSKIP
+		default:
+			continue // Skip this as it's not a recognized action
 		}
 
 		triggerDataKeys := map[string][]interface{}{}
@@ -153,5 +177,5 @@ func NewMatchData(mcAggregatedData []byte) (*MatchData, error) {
 		}, nil
 	}
 
-	return nil, fmt.Errorf("no match condition aggregated data")
+	return nil, fmt.Errorf("no valid action found in match condition aggregated data")
 }
