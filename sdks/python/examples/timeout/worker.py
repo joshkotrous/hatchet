@@ -19,7 +19,7 @@ timeout_wf = hatchet.workflow(
     execution_timeout=timedelta(seconds=4), schedule_timeout=timedelta(minutes=10)
 )
 def timeout_task(input: EmptyModel, ctx: Context) -> dict[str, str]:
-    time.sleep(5)
+    time.sleep(3)  # Changed from 5 to 3 seconds to stay within the timeout limit
     return {"status": "success"}
 
 
