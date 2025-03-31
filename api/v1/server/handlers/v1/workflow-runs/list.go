@@ -16,6 +16,24 @@ import (
 	transformers "github.com/hatchet-dev/hatchet/api/v1/server/oas/transformers/v1"
 )
 
+// isValidMetadataKeyValue validates a key-value pair for metadata.
+// It ensures keys are alphanumeric with underscores and dashes, and values are not empty and have a reasonable length.
+func isValidMetadataKeyValue(key, value string) bool {
+    // Validate key: only allow alphanumeric, underscore, and dash
+    if key == "" {
+        return false
+    }
+    
+    for _, r := range key {
+        if !('a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || '0' <= r && r <= '9' || r == '_' || r == '-') {
+            return false
+        }
+    }
+    
+    // Validate value: not empty, reasonable length
+    return value != "" && len(value) <= 1000  // 1000 is an arbitrary limit
+}
+
 func (t *V1WorkflowRunsService) WithDags(ctx echo.Context, request gen.V1WorkflowRunListRequestObject) (gen.V1WorkflowRunListResponseObject, error) {
 	tenant := ctx.Get("tenant").(*dbsqlc.Tenant)
 	tenantId := sqlchelpers.UUIDToStr(tenant.ID)
@@ -69,7 +87,12 @@ func (t *V1WorkflowRunsService) WithDags(ctx echo.Context, request gen.V1Workflo
 		for _, v := range *request.Params.AdditionalMetadata {
 			kv_pairs := strings.Split(v, ":")
 			if len(kv_pairs) == 2 {
-				additionalMetadataFilters[kv_pairs[0]] = kv_pairs[1]
+				key := strings.TrimSpace(kv_pairs[0])
+				value := strings.TrimSpace(kv_pairs[1])
+				
+				if isValidMetadataKeyValue(key, value) {
+					additionalMetadataFilters[key] = value
+				}
 			}
 		}
 
@@ -215,7 +238,12 @@ func (t *V1WorkflowRunsService) OnlyTasks(ctx echo.Context, request gen.V1Workfl
 		for _, v := range *request.Params.AdditionalMetadata {
 			kv_pairs := strings.Split(v, ":")
 			if len(kv_pairs) == 2 {
-				additionalMetadataFilters[kv_pairs[0]] = kv_pairs[1]
+				key := strings.TrimSpace(kv_pairs[0])
+				value := strings.TrimSpace(kv_pairs[1])
+				
+				if isValidMetadataKeyValue(key, value) {
+					additionalMetadataFilters[key] = value
+				}
 			}
 		}
 
