@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -48,8 +49,22 @@ func (r *WorkflowResult) StepOutput(key string, v interface{}) error {
 		return fmt.Errorf("step output for %s not found", key)
 	}
 
-	if err := json.Unmarshal(outputBytes, v); err != nil {
+	// Check for excessively large inputs
+	const maxSize = 10 * 1024 * 1024 // 10MB limit example
+	if len(outputBytes) > maxSize {
+		return fmt.Errorf("output size exceeds the maximum allowed size (%d bytes)", maxSize)
+	}
+
+	// Use a decoder for better control over the parsing process
+	decoder := json.NewDecoder(bytes.NewReader(outputBytes))
+	
+	if err := decoder.Decode(v); err != nil {
 		return fmt.Errorf("failed to unmarshal output: %w", err)
+	}
+	
+	// Ensure we've consumed all the input
+	if decoder.More() {
+		return fmt.Errorf("unexpected additional JSON data after the main object")
 	}
 
 	return nil
