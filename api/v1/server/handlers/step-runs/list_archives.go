@@ -12,10 +12,18 @@ import (
 )
 
 func (t *StepRunService) StepRunListArchives(ctx echo.Context, request gen.StepRunListArchivesRequestObject) (gen.StepRunListArchivesResponseObject, error) {
+	// Constants for input validation
+	const (
+		defaultLimit  = 1000
+		maxLimit      = 1000
+		defaultOffset = 0
+		maxOffset     = 10000
+	)
+
 	stepRun := ctx.Get("step-run").(*repository.GetStepRunFull)
 
-	limit := 1000
-	offset := 0
+	limit := defaultLimit
+	offset := defaultOffset
 
 	listOpts := &repository.ListStepRunArchivesOpts{
 		Limit:  &limit,
@@ -23,12 +31,28 @@ func (t *StepRunService) StepRunListArchives(ctx echo.Context, request gen.StepR
 	}
 
 	if request.Params.Limit != nil {
-		limit = int(*request.Params.Limit)
+		requestLimit := int(*request.Params.Limit)
+		// Ensure limit is positive and not exceeding the maximum
+		if requestLimit <= 0 {
+			limit = defaultLimit
+		} else if requestLimit > maxLimit {
+			limit = maxLimit
+		} else {
+			limit = requestLimit
+		}
 		listOpts.Limit = &limit
 	}
 
 	if request.Params.Offset != nil {
-		offset = int(*request.Params.Offset)
+		requestOffset := int(*request.Params.Offset)
+		// Ensure offset is non-negative and not exceeding the maximum
+		if requestOffset < 0 {
+			offset = defaultOffset
+		} else if requestOffset > maxOffset {
+			offset = maxOffset
+		} else {
+			offset = requestOffset
+		}
 		listOpts.Offset = &offset
 	}
 
