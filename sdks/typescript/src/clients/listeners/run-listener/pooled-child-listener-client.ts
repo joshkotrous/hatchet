@@ -46,13 +46,22 @@ export class RunGrpcPooledListener {
   }
 
   private async init(retries = 0) {
-    let retryCount = retries;
+    const MAX_RETRIES = 20; // Maximum number of total retries
     const MAX_RETRY_INTERVAL = 5000; // 5 seconds in milliseconds
     const BASE_RETRY_INTERVAL = 100; // 0.1 seconds in milliseconds
-
+    
+    let retryCount = retries;
+    
+    // If we've already exceeded the max retries, log a critical error and exit
+    if (retryCount > MAX_RETRIES) {
+      this.client.logger.error(`Maximum retry attempts (${MAX_RETRIES}) reached. Giving up.`);
+      this.handleMaxRetriesExceeded();
+      return;
+    }
+    
     if (retries > 0) {
       const backoffTime = Math.min(BASE_RETRY_INTERVAL * 2 ** (retries - 1), MAX_RETRY_INTERVAL);
-      this.client.logger.info(`Retrying in ... ${backoffTime / 1000} seconds`);
+      this.client.logger.info(`Retrying in ... ${backoffTime / 1000} seconds (attempt ${retryCount} of ${MAX_RETRIES})`);
       await sleep(backoffTime);
     }
 
@@ -67,7 +76,7 @@ export class RunGrpcPooledListener {
       if (retries > 0) setTimeout(() => this.replayRequests(), 100);
 
       for await (const event of this.listener) {
-        retryCount = 0;
+        retryCount = 0; // Reset retry count on successful event processing
 
         const emitter = this.subscribers[event.workflowRunId];
         if (emitter) {
@@ -88,20 +97,53 @@ export class RunGrpcPooledListener {
     } finally {
       // it is possible the server hangs up early,
       // restart the listener if we still have subscribers
+      const subscriberCount = Object.keys(this.subscribers).length;
       this.client.logger.debug(
-        `Child listener loop exited with ${Object.keys(this.subscribers).length} subscribers`
+        `Child listener loop exited with ${subscriberCount} subscribers`
       );
-      this.client.logger.debug(`Restarting child listener retry ${retryCount + 1}`);
-      this.init(retryCount + 1);
+      
+      if (subscriberCount === 0) {
+        this.client.logger.debug('No subscribers remaining, stopping retry attempts');
+        return;
+      }
+      
+      // Only retry if we haven't exceeded the max retries
+      if (retryCount + 1 <= MAX_RETRIES) {
+        this.client.logger.debug(`Restarting child listener retry ${retryCount + 1} of ${MAX_RETRIES}`);
+        this.init(retryCount + 1);
+      } else {
+        this.client.logger.error(`Maximum retry attempts (${MAX_RETRIES}) reached. Giving up.`);
+        this.handleMaxRetriesExceeded();
+      }
     }
+  }
+  
+  // Helper method to handle the case when max retries are exceeded
+  private handleMaxRetriesExceeded() {
+    // Clear subscribers to prevent further retries
+    this.subscribers = {};
+    
+    // Call onFinish callback to notify parent components
+    this.onFinish();
   }
 
   subscribe(request: SubscribeToWorkflowRunsRequest) {
     if (!this.listener) throw new Error('listener not initialized');
-
-    this.subscribers[request.workflowRunId] = new Streamable(this.listener, request.workflowRunId);
-    this.requestEmitter.emit('subscribe', request);
-    return this.subscribers[request.workflowRunId];
+    
+    // Validate workflowRunId
+    if (!request.workflowRunId || typeof request.workflowRunId !== 'string' || request.workflowRunId.trim() === '') {
+      throw new Error('Invalid workflowRunId: must be a non-empty string');
+    }
+    
+    // Use the validated workflowRunId
+    const safeWorkflowRunId = request.workflowRunId.trim();
+    
+    // Create a new request object with the safe ID
+    const safeRequest = { ...request, workflowRunId: safeWorkflowRunId };
+    
+    this.subscribers[safeWorkflowRunId] = new Streamable(this.listener, safeWorkflowRunId);
+    this.requestEmitter.emit('subscribe', safeRequest);
+    return this.subscribers[safeWorkflowRunId];
   }
 
   replayRequests() {
