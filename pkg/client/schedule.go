@@ -65,6 +65,61 @@ func NewScheduleClient(restClient *rest.ClientWithResponses, l *zerolog.Logger, 
 }
 
 func (c *scheduleClientImpl) Create(ctx context.Context, workflow string, opts *ScheduleOpts) (*gen.ScheduledWorkflows, error) {
+	// Basic validation
+	if opts == nil {
+		return nil, fmt.Errorf("schedule options cannot be nil")
+	}
+	
+	if workflow == "" {
+		return nil, fmt.Errorf("workflow ID cannot be empty")
+	}
+
+	if opts.TriggerAt.IsZero() {
+		return nil, fmt.Errorf("trigger time cannot be zero")
+	}
+
+	// Validate input map keys are not empty
+	if opts.Input != nil {
+		for k := range opts.Input {
+			if k == "" {
+				c.l.Warn().Msg("Empty key found in input map")
+				return nil, fmt.Errorf("input map contains empty key")
+			}
+		}
+	}
+
+	// Validate metadata keys are not empty
+	if opts.AdditionalMetadata != nil {
+		for k := range opts.AdditionalMetadata {
+			if k == "" {
+				c.l.Warn().Msg("Empty key found in additional metadata")
+				return nil, fmt.Errorf("additional metadata contains empty key")
+			}
+		}
+	}
+
+	// Use the validator if available
+	if c.v != nil {
+		type scheduleValidation struct {
+			TriggerAt          time.Time              `validate:"required"`
+			WorkflowID         string                 `validate:"required"`
+			Input              map[string]interface{} `validate:"omitempty,dive,keys"`
+			AdditionalMetadata map[string]string      `validate:"omitempty,dive,keys"`
+		}
+
+		sv := scheduleValidation{
+			TriggerAt:          opts.TriggerAt,
+			WorkflowID:         workflow,
+			Input:              opts.Input,
+			AdditionalMetadata: opts.AdditionalMetadata,
+		}
+
+		if err := c.v.Validate(sv); err != nil {
+			c.l.Warn().Err(err).Msg("Input validation failed")
+			return nil, fmt.Errorf("validation failed: %w", err)
+		}
+	}
+
 	additionalMeta := make(map[string]any)
 
 	for k, v := range opts.AdditionalMetadata {
