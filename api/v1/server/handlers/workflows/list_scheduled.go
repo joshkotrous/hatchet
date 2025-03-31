@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 
@@ -70,15 +71,25 @@ func (t *WorkflowService) WorkflowScheduledList(ctx echo.Context, request gen.Wo
 
 	if request.Params.AdditionalMetadata != nil {
 		additionalMetadata := make(map[string]interface{}, len(*request.Params.AdditionalMetadata))
-
+		
+		// Define a regular expression for validating keys and values
+		safeCharacterPattern := regexp.MustCompile(`^[a-zA-Z0-9_\-.]+$`)
+		
 		for _, v := range *request.Params.AdditionalMetadata {
 			splitValue := strings.Split(fmt.Sprintf("%v", v), ":")
 
 			if len(splitValue) == 2 {
-				additionalMetadata[splitValue[0]] = splitValue[1]
+				key := splitValue[0]
+				value := splitValue[1]
+				
+				// Validate key and value against the regular expression
+				if !safeCharacterPattern.MatchString(key) || !safeCharacterPattern.MatchString(value) {
+					return gen.WorkflowScheduledList400JSONResponse(apierrors.NewAPIErrors("Additional metadata keys and values must contain only alphanumeric characters, underscores, hyphens, and dots.")), nil
+				}
+				
+				additionalMetadata[key] = value
 			} else {
 				return gen.WorkflowScheduledList400JSONResponse(apierrors.NewAPIErrors("Additional metadata filters must be in the format key:value.")), nil
-
 			}
 		}
 
