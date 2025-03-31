@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -100,15 +101,40 @@ func (r *eventAPIRepository) ListEvents(ctx context.Context, tenantId string, op
 		countParams.AdditionalMetadata = opts.AdditionalMetadata
 	}
 
+	// Define allowed fields for ordering
+	allowedOrderByFields := map[string]bool{
+		"createdAt": true,
+		"id":        true,
+		"key":       true,
+		// Add other valid column names here as needed
+	}
+
+	// Define allowed order directions
+	allowedOrderDirections := map[string]bool{
+		"ASC":  true,
+		"DESC": true,
+	}
+
 	orderByField := "createdAt"
 	orderByDirection := "DESC"
 
 	if opts.OrderBy != nil {
-		orderByField = *opts.OrderBy
+		// Validate order by field against whitelist
+		if _, ok := allowedOrderByFields[*opts.OrderBy]; ok {
+			orderByField = *opts.OrderBy
+		} else {
+			return nil, fmt.Errorf("invalid order by field: %s", *opts.OrderBy)
+		}
 	}
 
 	if opts.OrderDirection != nil {
-		orderByDirection = *opts.OrderDirection
+		// Normalize and validate order direction
+		direction := strings.ToUpper(*opts.OrderDirection)
+		if _, ok := allowedOrderDirections[direction]; ok {
+			orderByDirection = direction
+		} else {
+			return nil, fmt.Errorf("invalid order direction: %s", *opts.OrderDirection)
+		}
 	}
 
 	queryParams.Orderby = orderByField + " " + orderByDirection
