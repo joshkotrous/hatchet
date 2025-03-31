@@ -83,7 +83,11 @@ export class ScheduleClient {
       }
 
       if (err instanceof AxiosError) {
-        throw new Error(JSON.stringify(err.response?.data.errors));
+        // Log the detailed error for debugging but don't expose in the error message
+        this.logger.debug('API error occurred during scheduled run creation', { 
+          error: err.response?.data 
+        });
+        throw new Error('Failed to create scheduled run due to API error');
       }
 
       throw err;
