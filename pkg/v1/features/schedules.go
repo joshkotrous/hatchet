@@ -46,13 +46,16 @@ type schedulesClientImpl struct {
 func NewSchedulesClient(
 	api *rest.ClientWithResponses,
 	tenantId *string,
-) SchedulesClient {
-	tenantIdUUID := uuid.MustParse(*tenantId)
+) (SchedulesClient, error) {
+	tenantIdUUID, err := uuid.Parse(*tenantId)
+	if err != nil {
+		return nil, err
+	}
 
 	return &schedulesClientImpl{
 		api:      api,
 		tenantId: tenantIdUUID,
-	}
+	}, nil
 }
 
 // Create creates a new scheduled workflow run.
