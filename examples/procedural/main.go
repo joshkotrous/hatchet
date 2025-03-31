@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -30,7 +32,8 @@ type proceduralParentOutput struct {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		panic(err)
+		log.Println("Error loading .env file: Environment variables may not be properly set")
+		// Continue execution - environment vars might be set through other means
 	}
 
 	events := make(chan string, 5*NUM_CHILDREN)
@@ -38,13 +41,13 @@ func main() {
 
 	cleanup, err := run(events)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Error during setup: %v", err)
 	}
 
 	<-interrupt
 
 	if err := cleanup(); err != nil {
-		panic(fmt.Errorf("error cleaning up: %w", err))
+		log.Fatalf("Error cleaning up: %v", err)
 	}
 }
 
@@ -220,14 +223,15 @@ func run(events chan<- string) (func() error, error) {
 		_, err := c.Admin().RunWorkflow("procedural-parent-workflow", nil)
 
 		if err != nil {
-			panic(fmt.Errorf("error running workflow: %w", err))
+			log.Printf("Error running workflow: %v", err)
+			os.Exit(1)
 		}
 	}()
 
 	cleanup, err := w.Start()
 
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("error starting worker: %w", err)
 	}
 
 	return cleanup, nil
