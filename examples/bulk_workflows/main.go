@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/joho/godotenv"
 
@@ -21,6 +23,27 @@ type userCreateEvent struct {
 
 type stepOneOutput struct {
 	Message string `json:"message"`
+}
+
+// sanitizeUsername validates and sanitizes a username to prevent injection attacks
+// and other security issues.
+func sanitizeUsername(username string) string {
+	// Limit length to reasonable size
+	const maxUsernameLength = 50
+	if len(username) > maxUsernameLength {
+		username = username[:maxUsernameLength]
+	}
+
+	// Remove any control characters and ensure the username only contains
+	// alphanumeric characters, dashes, underscores, and dots
+	var sanitized strings.Builder
+	for _, r := range username {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' {
+			sanitized.WriteRune(r)
+		}
+	}
+
+	return sanitized.String()
 }
 
 func main() {
@@ -130,8 +153,11 @@ func registerWorkflow(c client.Client, workflowName string) (w *worker.Worker, e
 
 					log.Printf("step-one")
 
+					// Sanitize username before using it
+					sanitizedUsername := sanitizeUsername(input.Username)
+
 					return &stepOneOutput{
-						Message: "Username is: " + input.Username,
+						Message: "Username is: " + sanitizedUsername,
 					}, nil
 				},
 				).SetName("step-one"),
