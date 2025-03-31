@@ -84,7 +84,33 @@ export class CronClient {
       }
 
       if (err instanceof AxiosError) {
-        throw new Error(JSON.stringify(err.response?.data.errors));
+        // Log the full error for debugging purposes
+        this.logger.error(`API Error while creating cron trigger: ${JSON.stringify(err.response?.data)}`);
+        
+        // Provide a sanitized error message to the client
+        let errorMessage = "Failed to create cron trigger";
+        
+        // Include HTTP status if available (this is generally safe to expose)
+        if (err.response?.status) {
+          errorMessage += ` (Status: ${err.response.status})`;
+        }
+        
+        // Add a generic description based on the status code
+        if (err.response?.status) {
+          if (err.response.status === 400) {
+            errorMessage += " - Bad request";
+          } else if (err.response.status === 401) {
+            errorMessage += " - Authentication required";
+          } else if (err.response.status === 403) {
+            errorMessage += " - Not authorized";
+          } else if (err.response.status === 404) {
+            errorMessage += " - Resource not found";
+          } else if (err.response.status >= 500) {
+            errorMessage += " - Server error";
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       throw err;
