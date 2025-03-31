@@ -68,7 +68,12 @@ export function ScheduledRunsTable({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() => {
     const filtersParam = searchParams.get('filters');
     if (filtersParam) {
-      return JSON.parse(filtersParam);
+      try {
+        return JSON.parse(filtersParam);
+      } catch (error) {
+        console.error("Error parsing filters from URL:", error);
+        return [];
+      }
     }
     return [];
   });
