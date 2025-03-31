@@ -140,6 +140,11 @@ func WithTLSConfig(tls *tls.Config) ServerOpt {
 	}
 }
 
+// WithInsecure disables TLS for the gRPC server, making all communication unencrypted.
+// SECURITY WARNING: This option should ONLY be used for development or testing purposes.
+// Using insecure mode in production environments poses significant security risks
+// as all gRPC communication will be unencrypted and susceptible to interception.
+// Instead, always use TLS in production by providing a proper TLS configuration.
 func WithInsecure() ServerOpt {
 	return func(opts *ServerOpts) {
 		opts.insecure = true
@@ -221,6 +226,10 @@ func (s *Server) startGRPC() (func() error, error) {
 	serverOpts := []grpc.ServerOption{}
 
 	if s.insecure {
+		// Add clear security warnings when insecure mode is enabled
+		s.l.Warn().Msg("⚠️ SECURITY WARNING: gRPC server running in INSECURE mode! ⚠️")
+		s.l.Warn().Msg("⚠️ All gRPC communication will be unencrypted and susceptible to interception! ⚠️")
+		s.l.Warn().Msg("⚠️ This mode should only be used for development/testing purposes! ⚠️")
 		serverOpts = append(serverOpts, grpc.Creds(insecure.NewCredentials()))
 	} else {
 		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(s.tls)))
