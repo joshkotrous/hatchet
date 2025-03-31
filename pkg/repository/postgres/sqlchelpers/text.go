@@ -2,12 +2,12 @@ package sqlchelpers
 
 import "github.com/jackc/pgx/v5/pgtype"
 
-func TextFromStr(str string) pgtype.Text {
+func TextFromStr(str string) (pgtype.Text, error) {
 	var pgText pgtype.Text
 
 	if err := pgText.Scan(str); err != nil {
-		panic(err)
+		return pgtype.Text{}, err
 	}
 
-	return pgText
+	return pgText, nil
 }
