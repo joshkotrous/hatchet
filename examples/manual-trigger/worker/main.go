@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -11,9 +13,28 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/worker"
 )
 
+// sanitizeUsername sanitizes a username to prevent injection attacks
+func sanitizeUsername(username string) string {
+	// Trim whitespace
+	sanitized := strings.TrimSpace(username)
+	
+	// Limit length
+	maxLength := 50
+	if len(sanitized) > maxLength {
+		sanitized = sanitized[:maxLength]
+	}
+
+	// Replace potentially dangerous characters
+	// Keep alphanumeric, underscore, dash, and dot
+	re := regexp.MustCompile(`[^a-zA-Z0-9_\-\.]`)
+	sanitized = re.ReplaceAllString(sanitized, "")
+	
+	return sanitized
+}
+
 type userCreateEvent struct {
 	Username string            `json:"username"`
-	UserID   string            `json:"user_id"`
+	UserID   string           `json:"user_id"`
 	Data     map[string]string `json:"data"`
 }
 
@@ -62,9 +83,12 @@ func run(ch <-chan interface{}, events chan<- string) error {
 					ctx.WorkflowInput(input)
 
 					time.Sleep(1 * time.Second)
+					
+					// Sanitize username before using it in output
+					sanitizedUsername := sanitizeUsername(input.Username)
 
 					return &stepOutput{
-						Message: "Step 1 got username: " + input.Username,
+						Message: "Step 1 got username: " + sanitizedUsername,
 					}, nil
 				},
 				).SetName("step-one"),
@@ -73,9 +97,12 @@ func run(ch <-chan interface{}, events chan<- string) error {
 					ctx.WorkflowInput(input)
 
 					time.Sleep(2 * time.Second)
+					
+					// Sanitize username before using it in output
+					sanitizedUsername := sanitizeUsername(input.Username)
 
 					return &stepOutput{
-						Message: "Step 2 got username: " + input.Username,
+						Message: "Step 2 got username: " + sanitizedUsername,
 					}, nil
 				}).SetName("step-two"),
 				worker.Fn(func(ctx worker.HatchetContext) (result *stepOutput, err error) {
