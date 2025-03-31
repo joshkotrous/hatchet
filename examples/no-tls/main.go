@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/joho/godotenv"
 
@@ -12,16 +14,28 @@ import (
 
 type stepOutput struct{}
 
+// handleError logs the detailed error for debugging purposes
+// but terminates the program with a generic message to avoid
+// exposing sensitive information.
+func handleError(context string, err error) {
+	// Log the detailed error for debugging (could go to a file)
+	log.Printf("%s: %v", context, err)
+	
+	// Exit with a generic message for the user
+	fmt.Fprintf(os.Stderr, "Error: %s. Check logs for details.\n", context)
+	os.Exit(1)
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		panic(err)
+		handleError("Failed to load environment", err)
 	}
 
 	c, err := client.New()
 
 	if err != nil {
-		panic(fmt.Sprintf("error creating client: %v", err))
+		handleError("Failed to create client", err)
 	}
 
 	w, err := worker.NewWorker(
@@ -31,7 +45,7 @@ func main() {
 		worker.WithMaxRuns(1),
 	)
 	if err != nil {
-		panic(fmt.Sprintf("error creating worker: %v", err))
+		handleError("Failed to create worker", err)
 	}
 
 	testSvc := w.NewService("test")
@@ -52,7 +66,7 @@ func main() {
 		},
 	)
 	if err != nil {
-		panic(fmt.Sprintf("error registering workflow: %v", err))
+		handleError("Failed to register workflow", err)
 	}
 
 	interruptCtx, cancel := cmdutils.InterruptContextFromChan(cmdutils.InterruptChan())
@@ -60,11 +74,11 @@ func main() {
 
 	cleanup, err := w.Start()
 	if err != nil {
-		panic(fmt.Sprintf("error starting worker: %v", err))
+		handleError("Failed to start worker", err)
 	}
 
 	<-interruptCtx.Done()
 	if err := cleanup(); err != nil {
-		panic(err)
+		handleError("Failed to clean up worker resources", err)
 	}
 }
