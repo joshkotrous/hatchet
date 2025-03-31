@@ -21,21 +21,108 @@ export type JSONType = {
 
 export const DEFAULT_COLLAPSED = ['advanced', 'user data'];
 
-class NoValidation implements ValidatorType {
-  validateFormData(): ValidationData<any> {
-    return { errors: [], errorSchema: {} };
+class BasicFormValidator implements ValidatorType {
+  validateFormData(formData: any, schema: RJSFSchema = {}): ValidationData<any> {
+    const errors: RJSFValidationError[] = [];
+    const errorSchema: Record<string, any> = {};
+    
+    // Check required fields
+    if (schema.required && Array.isArray(schema.required) && typeof formData === 'object' && formData !== null) {
+      for (const field of schema.required) {
+        if (formData[field] === undefined) {
+          const error: RJSFValidationError = {
+            property: field,
+            message: `${field} is a required field`,
+            stack: `${field} is a required field`
+          };
+          errors.push(error);
+          
+          errorSchema[field] = errorSchema[field] || {};
+          errorSchema[field].__errors = errorSchema[field].__errors || [];
+          errorSchema[field].__errors.push(error.message);
+        }
+      }
+    }
+    
+    // Basic type validation
+    if (schema.properties && typeof formData === 'object' && formData !== null) {
+      for (const [field, fieldSchema] of Object.entries(schema.properties)) {
+        if (formData[field] !== undefined && typeof fieldSchema === 'object' && 'type' in fieldSchema) {
+          const expectedType = (fieldSchema as RJSFSchema).type;
+          let isValid = true;
+          
+          switch (expectedType) {
+            case 'string':
+              isValid = typeof formData[field] === 'string';
+              break;
+            case 'number':
+            case 'integer':
+              isValid = typeof formData[field] === 'number';
+              break;
+            case 'boolean':
+              isValid = typeof formData[field] === 'boolean';
+              break;
+            case 'array':
+              isValid = Array.isArray(formData[field]);
+              break;
+            case 'object':
+              isValid = typeof formData[field] === 'object' && formData[field] !== null && !Array.isArray(formData[field]);
+              break;
+          }
+          
+          if (!isValid) {
+            const error: RJSFValidationError = {
+              property: field,
+              message: `${field} must be of type ${expectedType}`,
+              stack: `${field} must be of type ${expectedType}`
+            };
+            errors.push(error);
+            
+            errorSchema[field] = errorSchema[field] || {};
+            errorSchema[field].__errors = errorSchema[field].__errors || [];
+            errorSchema[field].__errors.push(error.message);
+          }
+        }
+      }
+    }
+    
+    return { errors, errorSchema };
   }
 
-  toErrorList(): RJSFValidationError[] {
-    return [];
+  toErrorList(errorSchema: Record<string, any> = {}): RJSFValidationError[] {
+    const errors: RJSFValidationError[] = [];
+    
+    for (const key in errorSchema) {
+      if (key === '__errors' && Array.isArray(errorSchema[key])) {
+        for (const message of errorSchema[key]) {
+          errors.push({
+            property: '',
+            message,
+            stack: message
+          });
+        }
+      } else if (typeof errorSchema[key] === 'object') {
+        const childErrors = this.toErrorList(errorSchema[key]);
+        for (const error of childErrors) {
+          errors.push({
+            property: key + (error.property ? '.' + error.property : ''),
+            message: error.message,
+            stack: key + (error.stack ? '.' + error.stack : '')
+          });
+        }
+      }
+    }
+    
+    return errors;
   }
 
-  isValid(): boolean {
-    return true;
+  isValid(formData: any, schema: RJSFSchema): boolean {
+    const { errors } = this.validateFormData(formData, schema);
+    return errors.length === 0;
   }
 
-  rawValidation() {
-    return {};
+  rawValidation(formData: any, schema: RJSFSchema): ValidationData<any> {
+    return this.validateFormData(formData, schema);
   }
 }
 
@@ -119,18 +206,37 @@ export function JsonForm({
             ObjectFieldTemplate: CollapsibleSection,
           }}
           uiSchema={uiSchema}
-          validator={new NoValidation()}
+          validator={new BasicFormValidator()}
           noHtml5Validate={true}
           onChange={(data) => {
-            // Transform the data to unwrap the advanced fields
-            const formData = { ...data.formData, ...data.formData.advanced };
+            // Create a clean copy of the form data
+            const formData: JSONType = { ...data.formData };
+            
+            // Safely extract only the expected triggered_by field from advanced
+            if (formData.advanced && typeof formData.advanced === 'object') {
+              // Extract only the triggered_by property from advanced
+              const advanced = formData.advanced as JSONType;
+              if ('triggered_by' in advanced) {
+                formData.triggered_by = advanced.triggered_by;
+              }
+            }
+            
+            // Remove the advanced object to prevent unwanted fields
             delete formData.advanced;
-            setInput((prev) =>
-              JSON.stringify({
-                ...JSON.parse(prev),
-                ...formData,
-              }),
-            );
+            
+            // Update state with validated data
+            setInput((prev) => {
+              try {
+                const prevData = JSON.parse(prev) as JSONType;
+                return JSON.stringify({
+                  ...prevData,
+                  ...formData,
+                });
+              } catch (error) {
+                console.error('Error parsing previous form data:', error);
+                return JSON.stringify(formData);
+              }
+            });
           }}
           onSubmit={onSubmit}
           onError={(e) => {
