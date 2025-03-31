@@ -401,7 +401,7 @@ class ApiClient:
             except ValueError:
                 data = response_text
         elif re.match(
-            r"^application/(json|[\w!#$&.+-^_]+\+json)\s*(;|$)",
+            r"^application/(json|[\w!#{{SOURCE_CODE}}.+-^_]+\+json)\s*(;|$)",
             content_type,
             re.IGNORECASE,
         ):
@@ -672,6 +672,8 @@ class ApiClient:
             m = re.search(r'filename=[\'"]?([^\'"\s]+)[\'"]?', content_disposition)
             assert m is not None, "Unexpected 'content-disposition' header value"
             filename = m.group(1)
+            # Sanitize filename to prevent path traversal
+            filename = os.path.basename(filename)
             path = os.path.join(os.path.dirname(path), filename)
 
         with open(path, "wb") as f:
