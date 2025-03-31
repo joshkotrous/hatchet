@@ -42,12 +42,36 @@ func (t *EventService) EventList(ctx echo.Context, request gen.EventListRequestO
 		listOpts.Keys = *request.Params.Keys
 	}
 
+	// Define allowed values for OrderByField
+	allowedOrderByFields := map[string]bool{
+		"id":         true,
+		"created_at": true,
+		"updated_at": true,
+		"key":        true,
+		"status":     true,
+		// Add other allowed fields based on your schema
+	}
+
+	// Define allowed values for OrderByDirection
+	allowedOrderByDirections := map[string]bool{
+		"ASC":  true,
+		"DESC": true,
+	}
+
 	if request.Params.OrderByField != nil {
-		listOpts.OrderBy = repository.StringPtr(string(*request.Params.OrderByField))
+		orderByField := string(*request.Params.OrderByField)
+		if !allowedOrderByFields[orderByField] {
+			return gen.EventList400JSONResponse(apierrors.NewAPIErrors("Invalid OrderByField value.")), nil
+		}
+		listOpts.OrderBy = repository.StringPtr(orderByField)
 	}
 
 	if request.Params.OrderByDirection != nil {
-		listOpts.OrderDirection = repository.StringPtr(strings.ToUpper(string(*request.Params.OrderByDirection)))
+		orderByDirection := strings.ToUpper(string(*request.Params.OrderByDirection))
+		if !allowedOrderByDirections[orderByDirection] {
+			return gen.EventList400JSONResponse(apierrors.NewAPIErrors("Invalid OrderByDirection value.")), nil
+		}
+		listOpts.OrderDirection = repository.StringPtr(orderByDirection)
 	}
 
 	if request.Params.Limit != nil {
@@ -77,10 +101,31 @@ func (t *EventService) EventList(ctx echo.Context, request gen.EventListRequestO
 			splitValue := strings.Split(fmt.Sprintf("%v", v), ":")
 
 			if len(splitValue) == 2 {
-				additionalMetadata[splitValue[0]] = splitValue[1]
+				key := strings.TrimSpace(splitValue[0])
+				value := strings.TrimSpace(splitValue[1])
+				
+				// Validate key: only allow alphanumeric, underscore, and hyphen characters
+				if key == "" || len(key) > 64 {
+					return gen.EventList400JSONResponse(apierrors.NewAPIErrors("Metadata keys must be between 1-64 characters.")), nil
+				}
+				
+				for _, char := range key {
+					if !((char >= 'a' && char <= 'z') || 
+						 (char >= 'A' && char <= 'Z') || 
+						 (char >= '0' && char <= '9') || 
+						 char == '_' || char == '-') {
+						return gen.EventList400JSONResponse(apierrors.NewAPIErrors("Metadata keys must contain only alphanumeric characters, underscores, and hyphens.")), nil
+					}
+				}
+				
+				// Limit value length to prevent abuse
+				if len(value) > 256 {
+					return gen.EventList400JSONResponse(apierrors.NewAPIErrors("Metadata values must not exceed 256 characters.")), nil
+				}
+				
+				additionalMetadata[key] = value
 			} else {
 				return gen.EventList400JSONResponse(apierrors.NewAPIErrors("Additional metadata filters must be in the format key:value.")), nil
-
 			}
 		}
 
