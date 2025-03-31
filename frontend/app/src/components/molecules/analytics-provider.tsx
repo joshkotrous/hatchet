@@ -3,6 +3,13 @@ import { useTenant } from '@/lib/atoms';
 import useApiMeta from '@/pages/auth/hooks/use-api-meta';
 import React, { PropsWithChildren, useEffect, useMemo } from 'react';
 
+// Declare global window interface for TypeScript
+declare global {
+  interface Window {
+    posthog?: any;
+  }
+}
+
 interface AnalyticsProviderProps {
   user: User;
 }
@@ -20,6 +27,13 @@ const AnalyticsProvider: React.FC<
     return meta.data?.posthog;
   }, [meta]);
 
+  // Function to validate configuration values
+  const isValidConfigValue = (value: string): boolean => {
+    // Only allow alphanumeric characters, hyphens, periods, colons, forward slashes, and underscores
+    const validPattern = /^[a-zA-Z0-9\-.:/_]+$/;
+    return typeof value === 'string' && validPattern.test(value);
+  };
+
   useEffect(() => {
     if (loaded) {
       return;
@@ -36,6 +50,12 @@ const AnalyticsProvider: React.FC<
       return;
     }
 
+    // Validate config values before using them
+    if (!isValidConfigValue(config.apiKey) || !isValidConfigValue(config.apiHost)) {
+      console.error('Invalid configuration values detected, skipping analytics initialization.');
+      return;
+    }
+
     console.log('Initializing Analytics, opt out in settings.');
     setLoaded(true);
     const posthogScript = `
@@ -48,8 +68,11 @@ posthog.init('${config.apiKey}',{
   }
 })
 `;
-    document.head.appendChild(document.createElement('script')).innerHTML =
-      posthogScript;
+    // Create and inject script in a secure way
+    const script = document.createElement('script');
+    const scriptContent = document.createTextNode(posthogScript);
+    script.appendChild(scriptContent);
+    document.head.appendChild(script);
   }, [config, loaded, tenant]);
 
   useEffect(() => {
@@ -58,11 +81,13 @@ posthog.init('${config.apiKey}',{
     }
 
     setTimeout(() => {
-      (window as any).posthog.identify(
-        user.metadata.id, // Required. Replace 'distinct_id' with your user's unique identifier
-        { email: user.email, name: user.name }, // $set, optional
-        {}, // $set_once, optional
-      );
+      if (window.posthog) {
+        window.posthog.identify(
+          user.metadata.id, // Required. Replace 'distinct_id' with your user's unique identifier
+          { email: user.email, name: user.name }, // $set, optional
+          {}, // $set_once, optional
+        );
+      }
     });
   }, [user, config, tenant]);
 
