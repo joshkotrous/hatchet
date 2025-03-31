@@ -23,26 +23,57 @@ export type RepoProps = {
   path: string;
 };
 
+// Validate path to prevent traversal
+const validatePath = (path: string): string => {
+  if (!path) return '';
+  // Prevent path traversal by removing '..' segments
+  return path.split('/').filter(part => part !== '..').join('/');
+};
+
+// Sanitize URL parameters
+const sanitizeUrlParam = (param: string | undefined, defaultValue: string): string => {
+  if (!param) {
+    return defaultValue;
+  }
+  // Only allow alphanumeric characters, hyphens, and underscores
+  return param.replace(/[^a-zA-Z0-9_\-]/g, '');
+};
+
 const getLocalUrl = (ext: string, { path }: RepoProps) => {
-  return `http://localhost:4001/${localPaths[ext]}/${path}`;
+  const safePath = validatePath(path);
+  return `http://localhost:4001/${localPaths[ext]}/${safePath}`;
 };
 
 const isDev = process?.env?.NODE_ENV === "development";
 
 const getRawUrl = ({ user, repo, branch, path }: RepoProps) => {
-  const ext = path.split(".").pop();
+  const safePath = validatePath(path);
+  const safeUser = sanitizeUrlParam(user, defaultUser);
+  const safeRepo = sanitizeUrlParam(repo, defaultRepo);
+  const safeBranch = sanitizeUrlParam(branch, defaultBranch);
+  
+  const ext = safePath.split(".").pop() || '';
+  
   if (isDev) {
-    return getLocalUrl(ext, { path });
+    return getLocalUrl(ext, { path: safePath });
   }
-  return `https://raw.githubusercontent.com/${user || defaultUser}/${repo || defaultRepo}/refs/heads/${branch || defaultBranch}/${localPaths[ext]}/${path}`;
+  
+  return `https://raw.githubusercontent.com/${safeUser}/${safeRepo}/refs/heads/${safeBranch}/${localPaths[ext]}/${safePath}`;
 };
 
 const getUIUrl = ({ user, repo, branch, path }: RepoProps) => {
-  const ext = path.split(".").pop();
+  const safePath = validatePath(path);
+  const safeUser = sanitizeUrlParam(user, defaultUser);
+  const safeRepo = sanitizeUrlParam(repo, defaultRepo);
+  const safeBranch = sanitizeUrlParam(branch, defaultBranch);
+  
+  const ext = safePath.split(".").pop() || '';
+  
   if (isDev) {
-    return getLocalUrl(ext, { path });
+    return getLocalUrl(ext, { path: safePath });
   }
-  return `https://github.com/${user || defaultUser}/${repo || defaultRepo}/blob/${branch || defaultBranch}/${localPaths[ext]}/${path}`;
+  
+  return `https://github.com/${safeUser}/${safeRepo}/blob/${safeBranch}/${localPaths[ext]}/${safePath}`;
 };
 
 export type Src = {
@@ -59,7 +90,10 @@ export const getSnippets = (
     props.map(async (prop) => {
       const rawUrl = getRawUrl(prop);
       const githubUrl = getUIUrl(prop);
-      const fileExt = prop.path.split(".").pop() as keyof typeof extToLanguage;
+      
+      // Extract extension from validated path for consistency
+      const safePath = validatePath(prop.path);
+      const fileExt = (safePath.split(".").pop() || '') as keyof typeof extToLanguage;
       const language = extToLanguage[fileExt];
 
       try {
