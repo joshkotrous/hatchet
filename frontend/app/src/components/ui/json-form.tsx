@@ -21,20 +21,124 @@ export type JSONType = {
 
 export const DEFAULT_COLLAPSED = ['advanced', 'user data'];
 
-class NoValidation implements ValidatorType {
-  validateFormData(): ValidationData<any> {
-    return { errors: [], errorSchema: {} };
+class BasicSchemaValidator implements ValidatorType {
+  validateFormData(formData: any, schema: RJSFSchema = {}): ValidationData<any> {
+    const errors: RJSFValidationError[] = [];
+    const errorSchema: any = {};
+    
+    // Basic validation for required fields
+    if (schema && schema.required && Array.isArray(schema.required)) {
+      for (const field of schema.required) {
+        if (formData === undefined || formData === null || !(field in formData)) {
+          const error = {
+            name: 'required',
+            property: `.${field}`,
+            message: `${field} is a required property`,
+            stack: `.${field} is a required property`,
+          };
+          errors.push(error);
+          if (!errorSchema[field]) errorSchema[field] = {};
+          errorSchema[field].__errors = [error.message];
+        }
+      }
+    }
+    
+    // Check property types if defined in schema
+    if (schema && schema.properties && typeof formData === 'object' && formData !== null) {
+      for (const key in schema.properties) {
+        if (key in formData) {
+          const propSchema = (schema.properties as any)[key];
+          const value = formData[key];
+          
+          if (propSchema.type) {
+            let typeError = false;
+            
+            switch (propSchema.type) {
+              case 'string':
+                typeError = typeof value !== 'string';
+                break;
+              case 'number':
+              case 'integer':
+                typeError = typeof value !== 'number';
+                break;
+              case 'boolean':
+                typeError = typeof value !== 'boolean';
+                break;
+              case 'array':
+                typeError = !Array.isArray(value);
+                break;
+              case 'object':
+                typeError = typeof value !== 'object' || value === null || Array.isArray(value);
+                break;
+            }
+            
+            if (typeError) {
+              const error = {
+                name: 'type',
+                property: `.${key}`,
+                message: `${key} must be a ${propSchema.type}`,
+                stack: `.${key} must be a ${propSchema.type}`,
+              };
+              errors.push(error);
+              if (!errorSchema[key]) errorSchema[key] = {};
+              errorSchema[key].__errors = errorSchema[key].__errors || [];
+              errorSchema[key].__errors.push(error.message);
+            }
+          }
+        }
+      }
+    }
+    
+    return { errors, errorSchema };
   }
 
-  toErrorList(): RJSFValidationError[] {
-    return [];
+  toErrorList(errorSchema: any = {}): RJSFValidationError[] {
+    const errors: RJSFValidationError[] = [];
+    
+    const processErrors = (schema: any, path: string = '') => {
+      if (schema.__errors) {
+        for (const error of schema.__errors) {
+          errors.push({
+            name: 'validation',
+            property: path,
+            message: error,
+            stack: `${path}: ${error}`,
+          });
+        }
+      }
+      
+      for (const key in schema) {
+        if (key !== '__errors' && typeof schema[key] === 'object') {
+          processErrors(schema[key], path ? `${path}.${key}` : `.${key}`);
+        }
+      }
+    };
+    
+    processErrors(errorSchema);
+    return errors;
   }
 
-  isValid(): boolean {
-    return true;
+  isValid(errorSchema: any = {}): boolean {
+    const hasErrors = (schema: any): boolean => {
+      if (schema.__errors && schema.__errors.length > 0) {
+        return true;
+      }
+      
+      for (const key in schema) {
+        if (key !== '__errors' && typeof schema[key] === 'object') {
+          if (hasErrors(schema[key])) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    };
+    
+    return !hasErrors(errorSchema);
   }
 
-  rawValidation() {
+  rawValidation(): any {
     return {};
   }
 }
@@ -119,7 +223,7 @@ export function JsonForm({
             ObjectFieldTemplate: CollapsibleSection,
           }}
           uiSchema={uiSchema}
-          validator={new NoValidation()}
+          validator={new BasicSchemaValidator()}
           noHtml5Validate={true}
           onChange={(data) => {
             // Transform the data to unwrap the advanced fields
