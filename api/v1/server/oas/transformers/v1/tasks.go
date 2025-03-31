@@ -18,7 +18,15 @@ import (
 
 func jsonToMap(jsonBytes []byte) map[string]interface{} {
 	result := make(map[string]interface{})
-	json.Unmarshal(jsonBytes, &result) // nolint: errcheck
+	if len(jsonBytes) == 0 {
+		return result
+	}
+	// Try to unmarshal the JSON
+	err := json.Unmarshal(jsonBytes, &result)
+	// If there's an error, return an empty map
+	if err != nil {
+		return make(map[string]interface{})
+	}
 	return result
 }
 
