@@ -81,6 +81,48 @@ class WorkerActionRunLoopManager:
         if self.runner:
             await self.runner.wait_for_tasks()
 
+    def _validate_action(self, action: Action) -> bool:
+        """
+        Validates an action before executing it.
+        Returns True if the action is valid and safe to execute, False otherwise.
+        """
+        # Check if action is an instance of the expected Action type
+        if not isinstance(action, Action):
+            logger.warning(f"Invalid action type: {type(action)}")
+            return False
+        
+        # Check for required action attributes
+        if not hasattr(action, 'name') or not action.name:
+            logger.warning("Action missing required name")
+            return False
+        
+        if not hasattr(action, 'workflow_id') or not action.workflow_id:
+            logger.warning("Action missing required workflow_id")
+            return False
+        
+        if not hasattr(action, 'input_data'):
+            logger.warning("Action missing required input_data")
+            return False
+        
+        # Check if action name is registered in the action registry
+        if action.name not in self.action_registry:
+            logger.warning(f"Unknown action name: {action.name}")
+            return False
+        
+        # If we have a validator for this action, use it
+        if action.name in self.validator_registry:
+            validator = self.validator_registry[action.name]
+            try:
+                is_valid = validator(action.input_data)
+                if not is_valid:
+                    logger.warning(f"Action {action.name} failed validation")
+                    return False
+            except Exception as e:
+                logger.warning(f"Validation error for action {action.name}: {e}")
+                return False
+        
+        return True
+
     async def _start_action_loop(self) -> None:
         self.runner = Runner(
             self.event_queue,
@@ -99,7 +141,13 @@ class WorkerActionRunLoopManager:
                 logger.debug("stopping action runner loop...")
                 break
 
+            # Validate action before executing it
+            if not self._validate_action(action):
+                logger.warning(f"Skipping invalid action: {action}")
+                continue
+
             self.runner.run(action)
+        
         logger.debug("action runner loop stopped")
 
     async def _get_action(self) -> Action | STOP_LOOP_TYPE:
