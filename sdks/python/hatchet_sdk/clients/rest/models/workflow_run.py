@@ -18,7 +18,7 @@ import json
 import pprint
 import re  # noqa: F401
 from datetime import datetime
-from typing import Any, ClassVar, Dict, List, Optional, Set
+from typing import Any, ClassVar, Dict, List, Optional, Set, Union
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 from typing_extensions import Annotated, Self
@@ -29,6 +29,10 @@ from hatchet_sdk.clients.rest.models.workflow_run_triggered_by import (
     WorkflowRunTriggeredBy,
 )
 from hatchet_sdk.clients.rest.models.workflow_version import WorkflowVersion
+
+
+# Define safe types for input validation
+InputValue = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
 
 
 class WorkflowRun(BaseModel):
@@ -46,7 +50,10 @@ class WorkflowRun(BaseModel):
     display_name: Optional[StrictStr] = Field(default=None, alias="displayName")
     job_runs: Optional[List[JobRun]] = Field(default=None, alias="jobRuns")
     triggered_by: WorkflowRunTriggeredBy = Field(alias="triggeredBy")
-    input: Optional[Dict[str, Any]] = None
+    input: Optional[Dict[str, InputValue]] = Field(
+        default=None,
+        description="Input data for workflow execution. WARNING: Must be validated before use in ML systems to prevent adversarial manipulation."
+    )
     error: Optional[StrictStr] = None
     started_at: Optional[datetime] = Field(default=None, alias="startedAt")
     finished_at: Optional[datetime] = Field(default=None, alias="finishedAt")
@@ -84,6 +91,66 @@ class WorkflowRun(BaseModel):
         validate_assignment=True,
         protected_namespaces=(),
     )
+
+    @classmethod
+    def validate_input_data(cls, input_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Validate and sanitize input data to prevent adversarial manipulation attacks.
+        
+        Args:
+            input_data: The input data to validate
+            
+        Returns:
+            The validated input data
+            
+        Raises:
+            ValueError: If the input data is invalid or potentially malicious
+        """
+        if input_data is None:
+            return None
+            
+        if not isinstance(input_data, dict):
+            raise ValueError("Input must be a dictionary")
+            
+        # Check for excessive size
+        if len(input_data) > 100:  # Prevent DoS with huge inputs
+            raise ValueError(f"Input data has too many keys ({len(input_data)})")
+            
+        # Helper function for recursive validation
+        def validate_recursive(data, path="", depth=0):
+            # Prevent deep nesting attacks
+            if depth > 5:  # Limit nested depth
+                raise ValueError(f"Input at '{path}' exceeds maximum nesting depth (5)")
+                
+            if isinstance(data, dict):
+                if len(data) > 100:  # Limit dictionary size
+                    raise ValueError(f"Dictionary at '{path}' has too many keys ({len(data)})")
+                # Recursively validate dict values
+                return {k: validate_recursive(v, f"{path}.{k}" if path else k, depth+1) 
+                       for k, v in data.items()}
+                       
+            elif isinstance(data, (list, tuple)):
+                if len(data) > 1000:  # Limit list/tuple size
+                    raise ValueError(f"List at '{path}' has too many items ({len(data)})")
+                # Recursively validate list items
+                return type(data)(validate_recursive(item, f"{path}[{i}]", depth+1) 
+                                 for i, item in enumerate(data))
+                                 
+            elif isinstance(data, str):
+                if len(data) > 10000:  # Limit string length
+                    raise ValueError(f"String at '{path}' is too long ({len(data)} chars)")
+                return data
+                
+            # Basic types are considered safe
+            elif isinstance(data, (int, float, bool, type(None))):
+                return data
+                
+            # Reject any other types for security
+            else:
+                raise ValueError(f"Unsupported data type at '{path}': {type(data).__name__}")
+        
+        # Validate the entire input structure
+        return {k: validate_recursive(v, k) for k, v in input_data.items()}
 
     def to_str(self) -> str:
         """Returns the string representation of the model using alias"""
