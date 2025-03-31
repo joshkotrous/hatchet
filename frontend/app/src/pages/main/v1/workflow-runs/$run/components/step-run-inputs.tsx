@@ -19,6 +19,16 @@ const tryFormat = (input: string) => {
   }
 };
 
+// Safely parse JSON input, returning a default value if parsing fails
+const safelyParseJSON = (input: string) => {
+  try {
+    return JSON.parse(input);
+  } catch (e) {
+    console.error("Error parsing JSON input:", e);
+    return {}; // Return an empty object as a fallback
+  }
+};
+
 export const StepRunInputs: React.FC<StepRunOutputProps> = ({
   input,
   schema,
@@ -51,7 +61,7 @@ export const StepRunInputs: React.FC<StepRunOutputProps> = ({
             <JsonForm
               inputSchema={schema as JSONType}
               setInput={setInput}
-              inputData={JSON.parse(input)}
+              inputData={safelyParseJSON(input)}
               onSubmit={handleOnPlay}
               disabled={disabled}
             />
