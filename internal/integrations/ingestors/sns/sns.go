@@ -18,7 +18,7 @@ import (
 )
 
 // https://github.com/robbiet480/go.sns/issues/2
-var hostPattern = regexp.MustCompile(`^sns\.[a-zA-Z0-9\-]{3,}\.amazonaws\.com(\.cn)?$`)
+var hostPattern = regexp.MustCompile(`^sns\.[a-zA-Z0-9\-]{3,}\.amazonaws\.com(\.cn)?`)
 
 // Payload contains a single POST from SNS
 type Payload struct {
@@ -73,6 +73,28 @@ func (payload *Payload) SignatureAlgorithm() x509.SignatureAlgorithm {
 	return x509.SHA1WithRSA
 }
 
+// validateSNSURL ensures that a URL is a valid AWS SNS URL
+func validateSNSURL(urlStr string) error {
+	if urlStr == "" {
+		return errors.New("URL is empty")
+	}
+
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	if parsedURL.Scheme != "https" {
+		return fmt.Errorf("URL should be using https")
+	}
+
+	if !hostPattern.Match([]byte(parsedURL.Host)) {
+		return fmt.Errorf("URL is located on an invalid domain")
+	}
+
+	return nil
+}
+
 // VerifyPayload will verify that a payload came from SNS
 func (payload *Payload) VerifyPayload() error {
 	payloadSignature, err := base64.StdEncoding.DecodeString(payload.Signature)
@@ -121,8 +143,8 @@ func (payload *Payload) VerifyPayload() error {
 // Subscribe will use the SubscribeURL in a payload to confirm a subscription and return a ConfirmSubscriptionResponse
 func (payload *Payload) Subscribe() (ConfirmSubscriptionResponse, error) {
 	var response ConfirmSubscriptionResponse
-	if payload.SubscribeURL == "" {
-		return response, errors.New("Payload does not have a SubscribeURL!")
+	if err := validateSNSURL(payload.SubscribeURL); err != nil {
+		return response, fmt.Errorf("invalid SubscribeURL: %w", err)
 	}
 
 	resp, err := http.Get(payload.SubscribeURL)
@@ -147,6 +169,10 @@ func (payload *Payload) Subscribe() (ConfirmSubscriptionResponse, error) {
 // Unsubscribe will use the UnsubscribeURL in a payload to confirm a subscription and return a UnsubscribeResponse
 func (payload *Payload) Unsubscribe() (UnsubscribeResponse, error) {
 	var response UnsubscribeResponse
+	if err := validateSNSURL(payload.UnsubscribeURL); err != nil {
+		return response, fmt.Errorf("invalid UnsubscribeURL: %w", err)
+	}
+
 	resp, err := http.Get(payload.UnsubscribeURL)
 	if err != nil {
 		return response, err
