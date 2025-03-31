@@ -2,6 +2,16 @@ import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { APIErrors } from './api/generated/data-contracts';
 
+// Helper function to sanitize HTML content to prevent XSS
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -15,7 +25,7 @@ export function getFieldErrors(apiErrors: APIErrors): Record<string, string> {
 
   for (const error of apiErrors.errors) {
     if (error.field && error.description) {
-      fieldErrors[error.field] = error.description;
+      fieldErrors[error.field] = escapeHtml(error.description);
     }
   }
 
