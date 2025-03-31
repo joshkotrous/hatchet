@@ -52,7 +52,11 @@ func (a *AdminServiceImpl) CancelTasks(ctx context.Context, req *contracts.Cance
 
 		if len(req.Filter.WorkflowIds) > 0 {
 			for _, id := range req.Filter.WorkflowIds {
-				workflowIds = append(workflowIds, uuid.MustParse(id))
+				parsedUUID, err := uuid.Parse(id)
+				if err != nil {
+					return nil, status.Errorf(codes.InvalidArgument, "invalid workflow ID format: %s", id)
+				}
+				workflowIds = append(workflowIds, parsedUUID)
 			}
 		}
 
@@ -175,7 +179,11 @@ func (a *AdminServiceImpl) ReplayTasks(ctx context.Context, req *contracts.Repla
 
 		if len(req.Filter.WorkflowIds) > 0 {
 			for _, id := range req.Filter.WorkflowIds {
-				workflowIds = append(workflowIds, uuid.MustParse(id))
+				parsedUUID, err := uuid.Parse(id)
+				if err != nil {
+					return nil, status.Errorf(codes.InvalidArgument, "invalid workflow ID format: %s", id)
+				}
+				workflowIds = append(workflowIds, parsedUUID)
 			}
 		}
 
