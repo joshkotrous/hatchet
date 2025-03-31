@@ -210,8 +210,22 @@ export function StepRunPlayground({
   const isLoading = !COMPLETED.includes(stepRun?.status || '');
 
   const handleOnPlay = () => {
-    const inputObj = JSON.parse(stepInput);
-    rerunStepMutation.mutate(inputObj);
+    try {
+      // Parse the input (this will throw if invalid JSON)
+      const inputObj = JSON.parse(stepInput);
+      
+      // Basic validation - ensure inputObj is an object
+      if (inputObj === null || typeof inputObj !== 'object') {
+        setErrors(['Input must be a valid JSON object.']);
+        return;
+      }
+      
+      // Proceed with the mutation
+      rerunStepMutation.mutate(inputObj);
+    } catch (error) {
+      // Handle JSON parse errors
+      setErrors([`Invalid JSON input: ${error instanceof Error ? error.message : String(error)}`]);
+    }
   };
 
   const handleOnCancel = () => {
