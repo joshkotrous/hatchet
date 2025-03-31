@@ -59,7 +59,7 @@ export class WebhookHandler {
     // verify hmac signature
     const actualSignature = createHmac('sha256', secret).update(body).digest('hex');
     if (actualSignature !== signature) {
-      throw new HatchetError(`Invalid signature, expected ${actualSignature}, got ${signature}`);
+      throw new HatchetError('Invalid signature');
     }
   }
 
