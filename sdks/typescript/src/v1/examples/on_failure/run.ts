@@ -6,7 +6,8 @@ async function main() {
     const res = await failureWorkflow.run({});
     console.log(res);
   } catch (e) {
-    console.log('error', e);
+    // Log only the error message and not the entire error object
+    console.log('error', e instanceof Error ? e.message : 'An unknown error occurred');
   }
 }
 
