@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/hatchet-dev/hatchet/pkg/repository"
 
@@ -51,8 +53,31 @@ func (a DefaultSecurityCheck) Check() {
 		return
 	}
 
-	req := fmt.Sprintf("%s/check?version=%s&tag=%s", a.Endpoint, a.Version, ident)
-	resp, err := http.Get(req) // #nosec
+	// Validate endpoint is a proper URL
+	endpointURL, err := url.Parse(a.Endpoint)
+	if err != nil {
+		a.Logger.Debug().Msgf("Invalid endpoint URL: %s", err)
+		return
+	}
+	
+	// Ensure endpoint is HTTP or HTTPS
+	if endpointURL.Scheme != "http" && endpointURL.Scheme != "https" {
+		a.Logger.Debug().Msgf("Endpoint URL must use HTTP or HTTPS scheme")
+		return
+	}
+	
+	// Handle path joining correctly
+	endpointPath := strings.TrimSuffix(endpointURL.Path, "/")
+	endpointURL.Path = endpointPath + "/check"
+	
+	// Construct the query parameters safely
+	query := url.Values{}
+	query.Add("version", a.Version)
+	query.Add("tag", ident)
+	endpointURL.RawQuery = query.Encode()
+	
+	// Make the request with the safely constructed URL
+	resp, err := http.Get(endpointURL.String())
 	if err != nil {
 		a.Logger.Debug().Msgf("Error making request to security endpoint: %s", err)
 		return
