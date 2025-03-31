@@ -212,8 +212,42 @@ export function TriggerWorkflowForm({
       return;
     }
 
-    const inputObj = JSON.parse(input || '{}');
-    const addlMetaObj = JSON.parse(addlMeta || '{}');
+    // Validate and parse input
+    let inputObj;
+    let addlMetaObj;
+    
+    try {
+      // Validate input JSON
+      if (input && input.length > 500000) { // 500KB limit for input
+        setErrors(['Input JSON exceeds maximum allowed size (500KB)']);
+        return;
+      }
+      
+      inputObj = JSON.parse(input || '{}');
+      
+      // Check if input is a valid object
+      if (inputObj === null || typeof inputObj !== 'object' || Array.isArray(inputObj)) {
+        setErrors(['Input must be a valid JSON object']);
+        return;
+      }
+      
+      // Validate additional metadata JSON
+      if (addlMeta && addlMeta.length > 100000) { // 100KB limit for metadata
+        setErrors(['Additional metadata exceeds maximum allowed size (100KB)']);
+        return;
+      }
+      
+      addlMetaObj = JSON.parse(addlMeta || '{}');
+      
+      // Check if metadata is a valid object
+      if (addlMetaObj === null || typeof addlMetaObj !== 'object' || Array.isArray(addlMetaObj)) {
+        setErrors(['Additional metadata must be a valid JSON object']);
+        return;
+      }
+    } catch (e) {
+      setErrors([`Invalid JSON: ${e instanceof Error ? e.message : 'unknown error'}`]);
+      return;
+    }
 
     if (timingOption === 'now') {
       triggerNowMutation.mutate({
