@@ -145,10 +145,23 @@ class RunEventListener:
 
                         try:
                             if workflow_event.eventPayload:
-                                payload = json.loads(workflow_event.eventPayload)
+                                # Validate it's a string first
+                                if isinstance(workflow_event.eventPayload, str):
+                                    # Parse JSON and validate it's a dictionary or list
+                                    parsed = json.loads(workflow_event.eventPayload)
+                                    if isinstance(parsed, (dict, list)):
+                                        payload = parsed
+                                    else:
+                                        print(f"Warning: Expected dictionary or list in JSON payload, got {type(parsed)}")
+                                        payload = None
+                                else:
+                                    print(f"Warning: Expected string payload, got {type(workflow_event.eventPayload)}")
+                                    payload = None
+                            else:
+                                payload = None
                         except Exception as e:
-                            payload = workflow_event.eventPayload
-                            pass
+                            print(f"Error parsing JSON payload: {e}")
+                            payload = None
 
                         yield StepRunEvent(type=eventType, payload=payload)
                     elif workflow_event.resourceType == RESOURCE_TYPE_WORKFLOW_RUN:
@@ -165,9 +178,23 @@ class RunEventListener:
 
                         try:
                             if workflow_event.eventPayload:
-                                payload = json.loads(workflow_event.eventPayload)
+                                # Validate it's a string first
+                                if isinstance(workflow_event.eventPayload, str):
+                                    # Parse JSON and validate it's a dictionary or list
+                                    parsed = json.loads(workflow_event.eventPayload)
+                                    if isinstance(parsed, (dict, list)):
+                                        payload = parsed
+                                    else:
+                                        print(f"Warning: Expected dictionary or list in JSON payload, got {type(parsed)}")
+                                        payload = None
+                                else:
+                                    print(f"Warning: Expected string payload, got {type(workflow_event.eventPayload)}")
+                                    payload = None
+                            else:
+                                payload = None
                         except Exception as e:
-                            pass
+                            print(f"Error parsing JSON payload: {e}")
+                            payload = None
 
                         yield StepRunEvent(type=eventType, payload=payload)
 
