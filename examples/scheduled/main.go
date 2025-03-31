@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -11,6 +13,17 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/cmdutils"
 	"github.com/hatchet-dev/hatchet/pkg/worker"
 )
+
+// handleFatalError logs the error and exits gracefully
+func handleFatalError(err error, message string) {
+	log.Printf("Fatal error: %s: %v\n", message, err)
+	os.Exit(1)
+}
+
+// logError logs the error without exiting
+func logError(err error, message string) {
+	log.Printf("Error: %s: %v\n", message, err)
+}
 
 // ❓ Create
 // ... normal workflow definition
@@ -28,13 +41,13 @@ func main() {
 	err := godotenv.Load()
 
 	if err != nil {
-		panic(err)
+		handleFatalError(err, "Failed to load environment variables")
 	}
 
 	c, err := client.New()
 
 	if err != nil {
-		panic(err)
+		handleFatalError(err, "Failed to create client")
 	}
 
 	w, err := worker.NewWorker(
@@ -44,7 +57,7 @@ func main() {
 	)
 
 	if err != nil {
-		panic(err)
+		handleFatalError(err, "Failed to create worker")
 	}
 
 	err = w.RegisterWorkflow(
@@ -59,7 +72,7 @@ func main() {
 	)
 
 	if err != nil {
-		panic(err)
+		handleFatalError(err, "Failed to register workflow")
 	}
 
 	interrupt := cmdutils.InterruptChan()
@@ -67,7 +80,7 @@ func main() {
 	cleanup, err := w.Start()
 
 	if err != nil {
-		panic(err)
+		handleFatalError(err, "Failed to start worker")
 	}
 
 	// ,
@@ -88,7 +101,8 @@ func main() {
 		)
 
 		if err != nil {
-			panic(err)
+			logError(err, "Failed to create schedule")
+			return
 		}
 
 		fmt.Println(schedule.TriggerAt, schedule.WorkflowName)
@@ -99,7 +113,7 @@ func main() {
 	<-interrupt
 
 	if err := cleanup(); err != nil {
-		panic(fmt.Errorf("error cleaning up: %w", err))
+		logError(err, "Error cleaning up")
 	}
 
 	// ,
@@ -111,7 +125,8 @@ func ListScheduledWorkflows() {
 	c, err := client.New()
 
 	if err != nil {
-		panic(err)
+		logError(err, "Failed to create client")
+		return
 	}
 
 	// ❓ List
@@ -119,7 +134,8 @@ func ListScheduledWorkflows() {
 	// !!
 
 	if err != nil {
-		panic(err)
+		logError(err, "Failed to list schedules")
+		return
 	}
 
 	for _, schedule := range *schedules.Rows {
@@ -131,7 +147,8 @@ func DeleteScheduledWorkflow(id string) {
 	c, err := client.New()
 
 	if err != nil {
-		panic(err)
+		logError(err, "Failed to create client")
+		return
 	}
 
 	// ❓ Delete
@@ -140,6 +157,7 @@ func DeleteScheduledWorkflow(id string) {
 	// !!
 
 	if err != nil {
-		panic(err)
+		logError(err, "Failed to delete schedule")
+		return
 	}
 }
