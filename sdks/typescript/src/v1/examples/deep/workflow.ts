@@ -1,6 +1,14 @@
 import sleep from '@hatchet/util/sleep';
 import { hatchet } from '../hatchet-client';
 
+// Helper function to validate and limit N
+function validateN(n: number, maxAllowed: number = 20): number {
+  if (typeof n !== 'number' || isNaN(n) || n <= 0) {
+    return 1; // Default to 1 if N is invalid
+  }
+  return Math.min(Math.floor(n), maxAllowed); // Limit N to maxAllowed and ensure it's an integer
+}
+
 type SimpleInput = {
   Message: string;
   N: number;
@@ -33,7 +41,7 @@ export const child2 = hatchet.workflow<SimpleInput, Output>({
 child2.task({
   name: 'transformer',
   fn: async (input, ctx) => {
-    const count = input.N;
+    const count = validateN(input.N);
     const promises = Array(count)
       .fill(null)
       .map(() => ({ workflow: child1, input }));
@@ -54,7 +62,7 @@ export const child3 = hatchet.workflow<SimpleInput, Output>({
 child3.task({
   name: 'transformer',
   fn: async (input, ctx) => {
-    const count = input.N;
+    const count = validateN(input.N);
     const promises = Array(count)
       .fill(null)
       .map(() => ({ workflow: child2, input }));
@@ -74,7 +82,7 @@ export const child4 = hatchet.workflow<SimpleInput, Output>({
 child4.task({
   name: 'transformer',
   fn: async (input, ctx) => {
-    const count = input.N;
+    const count = validateN(input.N);
     const promises = Array(count)
       .fill(null)
       .map(() => ({ workflow: child3, input }));
@@ -94,7 +102,7 @@ export const child5 = hatchet.workflow<SimpleInput, Output>({
 child5.task({
   name: 'transformer',
   fn: async (input, ctx) => {
-    const count = input.N;
+    const count = validateN(input.N);
     const promises = Array(count)
       .fill(null)
       .map(() => ({ workflow: child4, input }));
@@ -114,7 +122,7 @@ export const parent = hatchet.workflow<SimpleInput, { parent: Output['transforme
 parent.task({
   name: 'parent',
   fn: async (input, ctx) => {
-    const count = input.N; // Random number between 2-4
+    const count = validateN(input.N);
     const promises = Array(count)
       .fill(null)
       .map(() => ({ workflow: child5, input }));
