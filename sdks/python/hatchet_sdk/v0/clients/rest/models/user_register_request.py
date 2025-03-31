@@ -41,7 +41,11 @@ class UserRegisterRequest(BaseModel):
 
     def to_str(self) -> str:
         """Returns the string representation of the model using alias"""
-        return pprint.pformat(self.model_dump(by_alias=True))
+        # Create a copy of the model data with password masked
+        data_dict = self.model_dump(by_alias=True)
+        if "password" in data_dict:
+            data_dict["password"] = "******"  # Mask the password
+        return pprint.pformat(data_dict)
 
     def to_json(self) -> str:
         """Returns the JSON representation of the model using alias"""
