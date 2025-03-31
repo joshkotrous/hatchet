@@ -3,6 +3,8 @@ package slack
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/slack-go/slack"
 
@@ -60,7 +62,43 @@ type CreateChannelOutput struct {
 	ChannelId string `json:"channelId"`
 }
 
+// validateChannelName checks if the given channel name meets Slack's requirements
+func validateChannelName(name string) error {
+	// Check if the channel name is empty
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("channel name cannot be empty")
+	}
+
+	// Check length (Slack limits channel names to 80 characters)
+	if len(name) > 80 {
+		return fmt.Errorf("channel name cannot exceed 80 characters")
+	}
+
+	// Check if the name is lowercase
+	if name != strings.ToLower(name) {
+		return fmt.Errorf("channel name must be lowercase")
+	}
+
+	// Check if the first character is valid (must be alphanumeric)
+	if len(name) > 0 && (name[0] == '-' || name[0] == '_') {
+		return fmt.Errorf("channel name cannot start with a hyphen or underscore")
+	}
+
+	// Check for valid characters (alphanumeric, hyphens, and underscores)
+	validChars := regexp.MustCompile(`^[a-z0-9_-]+$`)
+	if !validChars.MatchString(name) {
+		return fmt.Errorf("channel name can only contain lowercase letters, numbers, hyphens, and underscores")
+	}
+
+	return nil
+}
+
 func (s *SlackIntegration) createChannel(ctx context.Context, data *CreateChannelData) (*CreateChannelOutput, error) {
+	// Validate the channel name
+	if err := validateChannelName(data.ChannelName); err != nil {
+		return nil, fmt.Errorf("invalid channel name: %w", err)
+	}
+
 	channel, err := s.api.CreateConversation(slack.CreateConversationParams{
 		IsPrivate:   true,
 		ChannelName: data.ChannelName,
