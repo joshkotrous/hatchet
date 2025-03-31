@@ -19,7 +19,7 @@ import pprint
 import re  # noqa: F401
 from typing import Any, ClassVar, Dict, List, Optional, Set
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing_extensions import Self
 
 
@@ -42,6 +42,36 @@ class CreateEventRequest(BaseModel):
         validate_assignment=True,
         protected_namespaces=(),
     )
+
+    @field_validator('data')
+    @classmethod
+    def validate_data(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate the data field to prevent adversarial inputs.
+        
+        Performs checks for:
+        1. Nested depth to prevent deeply nested structures that could cause parsing issues
+        2. Size limits to prevent resource exhaustion attacks
+        """
+        # Check for deeply nested structures
+        def check_nesting_depth(obj, current_depth=0, max_depth=10):
+            if current_depth > max_depth:
+                raise ValueError(f"Data contains too deeply nested structures (max depth: {max_depth})")
+            
+            if isinstance(obj, dict):
+                for value in obj.values():
+                    check_nesting_depth(value, current_depth + 1, max_depth)
+            elif isinstance(obj, list):
+                for item in obj:
+                    check_nesting_depth(item, current_depth + 1, max_depth)
+        
+        check_nesting_depth(v)
+        
+        # Check size limit (prevent extremely large payloads)
+        data_str = json.dumps(v)
+        if len(data_str) > 1_000_000:  # 1MB limit
+            raise ValueError("Data payload exceeds maximum allowed size")
+        
+        return v
 
     def to_str(self) -> str:
         """Returns the string representation of the model using alias"""
