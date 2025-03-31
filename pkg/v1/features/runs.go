@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/hatchet-dev/hatchet/pkg/client/rest"
@@ -38,29 +39,46 @@ type runsClientImpl struct {
 func NewRunsClient(
 	api *rest.ClientWithResponses,
 	tenantId *string,
-) RunsClient {
-	tenantIdUUID := uuid.MustParse(*tenantId)
+) (RunsClient, error) {
+	if tenantId == nil {
+		return nil, fmt.Errorf("tenant ID cannot be nil")
+	}
+	
+	tenantIdUUID, err := uuid.Parse(*tenantId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tenant ID: %w", err)
+	}
 
 	return &runsClientImpl{
 		api:      api,
 		tenantId: tenantIdUUID,
-	}
+	}, nil
 }
 
 // Get retrieves a workflow run by its ID.
 func (r *runsClientImpl) Get(ctx context.Context, runId string) (*rest.V1WorkflowRunGetResponse, error) {
+	runIdUUID, err := uuid.Parse(runId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid run ID: %w", err)
+	}
+	
 	return r.api.V1WorkflowRunGetWithResponse(
 		ctx,
-		uuid.MustParse(runId),
+		runIdUUID,
 	)
 }
 
 // GetDetails retrieves detailed information about a workflow run by its ID.
 func (r *runsClientImpl) GetDetails(ctx context.Context, runId string) (*rest.WorkflowRunGetShapeResponse, error) {
+	runIdUUID, err := uuid.Parse(runId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid run ID: %w", err)
+	}
+	
 	return r.api.WorkflowRunGetShapeWithResponse(
 		ctx,
 		r.tenantId,
-		uuid.MustParse(runId),
+		runIdUUID,
 	)
 }
 
