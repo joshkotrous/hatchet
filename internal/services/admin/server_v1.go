@@ -17,7 +17,16 @@ import (
 )
 
 func (a *AdminServiceImpl) triggerWorkflowV1(ctx context.Context, req *contracts.TriggerWorkflowRequest) (*contracts.TriggerWorkflowResponse, error) {
-	tenant := ctx.Value("tenant").(*dbsqlc.Tenant)
+	tenantValue := ctx.Value("tenant")
+	if tenantValue == nil {
+		return nil, status.Error(codes.InvalidArgument, "tenant not found in context")
+	}
+
+	tenant, ok := tenantValue.(*dbsqlc.Tenant)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant type in context")
+	}
+
 	tenantId := sqlchelpers.UUIDToStr(tenant.ID)
 
 	canCreateWR, wrLimit, err := a.entitlements.TenantLimit().CanCreate(
@@ -86,7 +95,16 @@ func (a *AdminServiceImpl) triggerWorkflowV1(ctx context.Context, req *contracts
 }
 
 func (a *AdminServiceImpl) bulkTriggerWorkflowV1(ctx context.Context, req *contracts.BulkTriggerWorkflowRequest) (*contracts.BulkTriggerWorkflowResponse, error) {
-	tenant := ctx.Value("tenant").(*dbsqlc.Tenant)
+	tenantValue := ctx.Value("tenant")
+	if tenantValue == nil {
+		return nil, status.Error(codes.InvalidArgument, "tenant not found in context")
+	}
+
+	tenant, ok := tenantValue.(*dbsqlc.Tenant)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant type in context")
+	}
+
 	tenantId := sqlchelpers.UUIDToStr(tenant.ID)
 
 	opts := make([]*v1.WorkflowNameTriggerOpts, len(req.Workflows))
