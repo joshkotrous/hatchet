@@ -2,6 +2,7 @@ package authn
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo/v4"
@@ -11,6 +12,22 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/postgres/dbsqlc"
 	"github.com/hatchet-dev/hatchet/pkg/repository/postgres/sqlchelpers"
 )
+
+// List of protected keys that should not be manipulated by SaveKV
+var protectedSessionKeys = map[string]bool{
+	"authenticated":   true,
+	"user_id":        true,
+	"oauth_triggered": true,
+}
+
+// isProtectedKey checks if a key is protected or is an OAuth state key
+func isProtectedKey(k string) bool {
+	if protectedSessionKeys[k] {
+		return true
+	}
+	// Check for OAuth state keys
+	return len(k) >= 11 && k[:11] == "oauth_state_"
+}
 
 type SessionHelpers struct {
 	config *server.ServerConfig
@@ -58,6 +75,11 @@ func (s *SessionHelpers) SaveKV(
 	c echo.Context,
 	k, v string,
 ) error {
+	// Validate that the key is not a protected session key
+	if isProtectedKey(k) {
+		return fmt.Errorf("cannot set protected session key: %s", k)
+	}
+
 	session, err := s.config.SessionStore.Get(c.Request(), s.config.SessionStore.GetName())
 
 	if err != nil {
@@ -109,10 +131,22 @@ func (s *SessionHelpers) RemoveKey(
 	return session.Save(c.Request(), c.Response())
 }
 
+// isValidIntegrationName checks if the integration name contains only allowed characters
+func isValidIntegrationName(name string) bool {
+	// This regex allows alphanumeric characters, underscore, hyphen, and dot
+	match, _ := regexp.MatchString("^[a-zA-Z0-9_\\-\\.]+$", name)
+	return match && len(name) > 0 && len(name) <= 50 // Adding reasonable length restrictions
+}
+
 func (s *SessionHelpers) SaveOAuthState(
 	c echo.Context,
 	integration string,
 ) (string, error) {
+	// Validate integration parameter to prevent key manipulation
+	if !isValidIntegrationName(integration) {
+		return "", fmt.Errorf("invalid integration name: must contain only alphanumeric characters, underscore, hyphen, or dot")
+	}
+
 	state, err := random.Generate(32)
 
 	if err != nil {
@@ -144,6 +178,11 @@ func (s *SessionHelpers) ValidateOAuthState(
 	c echo.Context,
 	integration string,
 ) (isValidated bool, isOAuthTriggered bool, err error) {
+	// Validate integration parameter to maintain consistency with SaveOAuthState
+	if !isValidIntegrationName(integration) {
+		return false, false, fmt.Errorf("invalid integration name: must contain only alphanumeric characters, underscore, hyphen, or dot")
+	}
+
 	stateKey := fmt.Sprintf("oauth_state_%s", integration)
 
 	session, err := s.config.SessionStore.Get(c.Request(), s.config.SessionStore.GetName())
