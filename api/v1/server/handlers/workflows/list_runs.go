@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,10 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/postgres/dbsqlc"
 	"github.com/hatchet-dev/hatchet/pkg/repository/postgres/sqlchelpers"
 )
+
+// metadataKeyRegex validates that metadata keys only contain alphanumeric characters,
+// hyphens, underscores, and periods.
+var metadataKeyRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_.]+$`)
 
 func (t *WorkflowService) WorkflowRunList(ctx echo.Context, request gen.WorkflowRunListRequestObject) (gen.WorkflowRunListResponseObject, error) {
 	tenant := ctx.Get("tenant").(*dbsqlc.Tenant)
@@ -33,14 +38,42 @@ func (t *WorkflowService) WorkflowRunList(ctx echo.Context, request gen.Workflow
 		OrderDirection: &orderDirection,
 	}
 
+	// Define allowed values for orderBy and orderDirection
+	allowedOrderByFields := map[string]bool{
+		"createdAt":   true,
+		"updatedAt":   true,
+		"startedAt":   true,
+		"finishedAt":  true,
+		"status":      true,
+		"workflowId":  true,
+		"eventId":     true,
+		"tenantId":    true,
+		"displayName": true,
+	}
+
+	allowedOrderDirections := map[string]bool{
+		"ASC":  true,
+		"DESC": true,
+	}
+
 	if request.Params.OrderByField != nil {
-		orderBy = string(*request.Params.OrderByField)
-		listOpts.OrderBy = &orderBy
+		orderByValue := string(*request.Params.OrderByField)
+		if allowedOrderByFields[orderByValue] {
+			orderBy = orderByValue
+			listOpts.OrderBy = &orderBy
+		} else {
+			return gen.WorkflowRunList400JSONResponse(apierrors.NewAPIErrors("Invalid orderBy field provided.")), nil
+		}
 	}
 
 	if request.Params.OrderByDirection != nil {
-		orderDirection = string(*request.Params.OrderByDirection)
-		listOpts.OrderDirection = &orderDirection
+		orderDirectionValue := strings.ToUpper(string(*request.Params.OrderByDirection))
+		if allowedOrderDirections[orderDirectionValue] {
+			orderDirection = orderDirectionValue
+			listOpts.OrderDirection = &orderDirection
+		} else {
+			return gen.WorkflowRunList400JSONResponse(apierrors.NewAPIErrors("Invalid orderDirection. Allowed values: ASC, DESC.")), nil
+		}
 	}
 
 	if request.Params.CreatedAfter != nil {
@@ -103,14 +136,31 @@ func (t *WorkflowService) WorkflowRunList(ctx echo.Context, request gen.Workflow
 		additionalMetadata := make(map[string]interface{}, len(*request.Params.AdditionalMetadata))
 
 		for _, v := range *request.Params.AdditionalMetadata {
-			splitValue := strings.Split(fmt.Sprintf("%v", v), ":")
+			splitValue := strings.SplitN(fmt.Sprintf("%v", v), ":", 2)
 
-			if len(splitValue) == 2 {
-				additionalMetadata[splitValue[0]] = splitValue[1]
-			} else {
+			if len(splitValue) != 2 {
 				return gen.WorkflowRunList400JSONResponse(apierrors.NewAPIErrors("Additional metadata filters must be in the format key:value.")), nil
-
 			}
+
+			key := strings.TrimSpace(splitValue[0])
+			value := strings.TrimSpace(splitValue[1])
+
+			// Validate key format using regex
+			if !metadataKeyRegex.MatchString(key) {
+				return gen.WorkflowRunList400JSONResponse(apierrors.NewAPIErrors("Metadata key contains invalid characters. Only alphanumeric characters, hyphens, underscores, and periods are allowed.")), nil
+			}
+
+			// Check key length
+			if len(key) > 64 {
+				return gen.WorkflowRunList400JSONResponse(apierrors.NewAPIErrors("Metadata key exceeds maximum length of 64 characters.")), nil
+			}
+
+			// Check value length
+			if len(value) > 1024 {
+				return gen.WorkflowRunList400JSONResponse(apierrors.NewAPIErrors("Metadata value exceeds maximum length of 1024 characters.")), nil
+			}
+
+			additionalMetadata[key] = value
 		}
 
 		listOpts.AdditionalMetadata = additionalMetadata
