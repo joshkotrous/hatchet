@@ -210,8 +210,45 @@ export function StepRunPlayground({
   const isLoading = !COMPLETED.includes(stepRun?.status || '');
 
   const handleOnPlay = () => {
-    const inputObj = JSON.parse(stepInput);
-    rerunStepMutation.mutate(inputObj);
+    try {
+      // Parse the input with error handling
+      let inputObj;
+      try {
+        inputObj = JSON.parse(stepInput);
+      } catch (error) {
+        setErrors([`Invalid JSON format: ${error instanceof Error ? error.message : String(error)}`]);
+        return;
+      }
+      
+      // Basic validation - ensure it's an object
+      if (typeof inputObj !== 'object' || inputObj === null) {
+        setErrors(['Input must be a valid JSON object']);
+        return;
+      }
+      
+      // Check input size (prevent DoS via oversized inputs)
+      const inputSize = new TextEncoder().encode(JSON.stringify(inputObj)).length;
+      const MAX_INPUT_SIZE = 5 * 1024 * 1024; // 5MB limit
+      if (inputSize > MAX_INPUT_SIZE) {
+        setErrors([`Input size exceeds maximum allowed (${Math.round(inputSize / (1024 * 1024))}MB > ${MAX_INPUT_SIZE / (1024 * 1024)}MB)`]);
+        return;
+      }
+      
+      // Basic schema validation if schema is available and has required fields
+      const schema = stepRunSchemaQuery.data;
+      if (schema && schema.required && Array.isArray(schema.required) && schema.required.length > 0) {
+        const missingFields = schema.required.filter(field => inputObj[field] === undefined);
+        if (missingFields.length > 0) {
+          setErrors([`Missing required fields: ${missingFields.join(', ')}`]);
+          return;
+        }
+      }
+      
+      // Proceed with mutation
+      rerunStepMutation.mutate(inputObj);
+    } catch (error) {
+      setErrors([`Error processing input: ${error instanceof Error ? error.message : String(error)}`]);
+    }
   };
 
   const handleOnCancel = () => {
