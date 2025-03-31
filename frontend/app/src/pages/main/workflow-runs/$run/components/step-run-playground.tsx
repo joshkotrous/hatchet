@@ -26,6 +26,28 @@ import { WorkflowRunsTable } from '../../components/workflow-runs-table';
 import { StepRunEvents } from './step-run-events';
 import RelativeDate from '@/components/molecules/relative-date';
 
+// Helper function to safely parse and validate JSON
+const safeParseJSON = (jsonString: string, defaultValue: any = {}) => {
+  try {
+    if (!jsonString || jsonString.trim() === '') {
+      return defaultValue;
+    }
+    
+    const parsed = JSON.parse(jsonString);
+    
+    // Ensure the parsed value is an object
+    if (parsed !== null && typeof parsed === 'object') {
+      return parsed;
+    }
+    
+    console.warn('Invalid JSON format:', jsonString);
+    return defaultValue;
+  } catch (error) {
+    console.error('Error parsing JSON:', error);
+    return defaultValue;
+  }
+};
+
 export function StepRunPlayground({
   stepRun,
   setStepRun,
@@ -63,13 +85,13 @@ export function StepRunPlayground({
 
       return {
         ...acc,
-        [stepRun.step.readableId]: JSON.parse(stepRun.output || '{}'),
+        [stepRun.step.readableId]: safeParseJSON(stepRun.output, {}),
       };
     }, {});
   };
 
   const originalInput = useMemo(() => {
-    const input = JSON.parse(stepRun?.input || '{}');
+    const input = safeParseJSON(stepRun?.input, {});
     const previousRunData = updateParentData(input, workflowRun);
 
     const modifiedInput = JSON.stringify(
@@ -205,8 +227,12 @@ export function StepRunPlayground({
   const isLoading = !COMPLETED.includes(stepRun?.status || '');
 
   const handleOnPlay = () => {
-    const inputObj = JSON.parse(stepInput);
-    rerunStepMutation.mutate(inputObj);
+    try {
+      const inputObj = safeParseJSON(stepInput, {});
+      rerunStepMutation.mutate(inputObj);
+    } catch (error) {
+      setErrors(['Invalid JSON input format']);
+    }
   };
 
   const handleOnCancel = () => {
