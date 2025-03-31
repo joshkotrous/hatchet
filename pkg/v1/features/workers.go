@@ -2,6 +2,7 @@ package features
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/hatchet-dev/hatchet/pkg/client/rest"
@@ -36,13 +37,20 @@ type workersClientImpl struct {
 func NewWorkersClient(
 	api *rest.ClientWithResponses,
 	tenantId *string,
-) WorkersClient {
-	tenantIdUUID := uuid.MustParse(*tenantId)
+) (WorkersClient, error) {
+	if tenantId == nil {
+		return nil, fmt.Errorf("tenant ID is required")
+	}
+	
+	tenantIdUUID, err := uuid.Parse(*tenantId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tenant ID format: %w", err)
+	}
 
 	return &workersClientImpl{
 		api:      api,
 		tenantId: tenantIdUUID,
-	}
+	}, nil
 }
 
 // Get retrieves a worker by its ID.
