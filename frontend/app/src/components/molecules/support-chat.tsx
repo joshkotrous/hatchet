@@ -20,7 +20,14 @@ const SupportChat: React.FC<PropsWithChildren & SupportChatProps> = ({
       return null;
     }
 
-    return meta.data.pylonAppId;
+    // Validate that pylonAppId only contains expected characters
+    const pylonAppId = meta.data.pylonAppId;
+    if (typeof pylonAppId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(pylonAppId)) {
+      console.error('Invalid pylonAppId format');
+      return null;
+    }
+
+    return pylonAppId;
   }, [meta]);
 
   useEffect(() => {
@@ -28,9 +35,38 @@ const SupportChat: React.FC<PropsWithChildren & SupportChatProps> = ({
       return;
     }
 
-    const pylonScript = `(function(){var e=window;var t=document;var n=function(){n.e(arguments)};n.q=[];n.e=function(e){n.q.push(e)};e.Pylon=n;var r=function(){var e=t.createElement("script");e.setAttribute("type","text/javascript");e.setAttribute("async","true");e.setAttribute("src","https://widget.usepylon.com/widget/${APP_ID}");var n=t.getElementsByTagName("script")[0];n.parentNode.insertBefore(e,n)};if(t.readyState==="complete"){r()}else if(e.addEventListener){e.addEventListener("load",r,false)}})();`;
-    document.body.appendChild(document.createElement('script')).innerHTML =
-      pylonScript;
+    // Reimplement the Pylon initialization without using innerHTML
+    const e = window;
+    const t = document;
+    
+    // Create the Pylon function
+    const n = function() {
+      (n as any).e(arguments);
+    } as any;
+    n.q = [];
+    n.e = function(e: any) {
+      n.q.push(e);
+    };
+    e.Pylon = n;
+    
+    // Create the function that loads the script
+    const r = function() {
+      const e = t.createElement("script");
+      e.setAttribute("type", "text/javascript");
+      e.setAttribute("async", "true");
+      e.setAttribute("src", `https://widget.usepylon.com/widget/${APP_ID}`);
+      const n = t.getElementsByTagName("script")[0];
+      if (n && n.parentNode) {
+        n.parentNode.insertBefore(e, n);
+      }
+    };
+    
+    // Execute based on document readiness
+    if (t.readyState === "complete") {
+      r();
+    } else if (e.addEventListener) {
+      e.addEventListener("load", r, false);
+    }
   }, [APP_ID]);
 
   useEffect(() => {
