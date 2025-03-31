@@ -26,10 +26,13 @@ from typing_extensions import Self
 class UserLoginRequest(BaseModel):
     """
     UserLoginRequest
+    
+    Note: This class contains sensitive authentication data (password).
+    Use secure serialization methods (to_secure_dict, to_secure_json) for logging or debugging.
     """  # noqa: E501
 
     email: StrictStr = Field(description="The email address of the user.")
-    password: StrictStr = Field(description="The password of the user.")
+    password: StrictStr = Field(description="The password of the user. This sensitive data is redacted in string representations.")
     __properties: ClassVar[List[str]] = ["email", "password"]
 
     model_config = ConfigDict(
@@ -40,12 +43,17 @@ class UserLoginRequest(BaseModel):
 
     def to_str(self) -> str:
         """Returns the string representation of the model using alias"""
-        return pprint.pformat(self.model_dump(by_alias=True))
+        # Use the secure version to avoid exposing the password
+        return pprint.pformat(self.to_secure_dict())
 
     def to_json(self) -> str:
         """Returns the JSON representation of the model using alias"""
         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
         return json.dumps(self.to_dict())
+
+    def to_secure_json(self) -> str:
+        """Returns the JSON representation with sensitive data redacted"""
+        return json.dumps(self.to_secure_dict())
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
@@ -71,6 +79,17 @@ class UserLoginRequest(BaseModel):
         )
         return _dict
 
+    def to_secure_dict(self) -> Dict[str, Any]:
+        """Return the dictionary representation with sensitive data redacted"""
+        # Get the dictionary representation
+        _dict = self.to_dict()
+        
+        # Redact the password
+        if "password" in _dict:
+            _dict["password"] = "********"
+            
+        return _dict
+
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
         """Create an instance of UserLoginRequest from a dict"""
@@ -84,3 +103,7 @@ class UserLoginRequest(BaseModel):
             {"email": obj.get("email"), "password": obj.get("password")}
         )
         return _obj
+
+    def __repr__(self) -> str:
+        """Ensure password is redacted in all string representations"""
+        return self.to_str()
