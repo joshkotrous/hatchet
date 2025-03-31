@@ -21,15 +21,26 @@ const getInitialValue = <T>(key: string, defaultValue?: T): T | undefined => {
   return;
 };
 
-const lastTenantKey = 'lastTenant';
+const lastTenantIdKey = 'lastTenantId';
 
-const lastTenantAtomInit = atom(getInitialValue<Tenant>(lastTenantKey));
+const lastTenantAtomInit = atom<Tenant | undefined>(() => {
+  const item = localStorage.getItem(lastTenantIdKey);
+  if (item !== null) {
+    try {
+      const id = JSON.parse(item) as string;
+      return { metadata: { id } } as Tenant;
+    } catch (e) {
+      return undefined;
+    }
+  }
+  return undefined;
+});
 
 export const lastTenantAtom = atom(
   (get) => get(lastTenantAtomInit),
   (_get, set, newVal: Tenant) => {
     set(lastTenantAtomInit, newVal);
-    localStorage.setItem(lastTenantKey, JSON.stringify(newVal));
+    localStorage.setItem(lastTenantIdKey, JSON.stringify(newVal.metadata.id));
   },
 );
 
