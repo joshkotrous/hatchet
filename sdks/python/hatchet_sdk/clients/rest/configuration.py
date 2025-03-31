@@ -275,6 +275,7 @@ class Configuration:
             self.debug = debug
         else:
             self.__debug = False
+            self.__http_debug = False
         """Debug switch
         """
 
@@ -440,14 +441,52 @@ class Configuration:
             # if debug status is True, turn on debug logging
             for _, logger in self.logger.items():
                 logger.setLevel(logging.DEBUG)
-            # turn on httplib debug
-            httplib.HTTPConnection.debuglevel = 1
+            # turn on httplib debug by setting http_debug property
+            self.http_debug = True
+            # warn about security implications
+            for _, logger in self.logger.items():
+                logger.warning(
+                    "Debug mode is enabled. This may log sensitive information such as API keys "
+                    "and credentials. It is not recommended for production environments."
+                )
         else:
             # if debug status is False, turn off debug logging,
             # setting log level to default `logging.WARNING`
             for _, logger in self.logger.items():
                 logger.setLevel(logging.WARNING)
             # turn off httplib debug
+            self.http_debug = False
+
+    @property
+    def http_debug(self) -> bool:
+        """HTTP debug status - controls debugging of HTTP connections
+        
+        :return: The HTTP debug status
+        :rtype: bool
+        """
+        return self.__http_debug
+
+    @http_debug.setter
+    def http_debug(self, value: bool) -> None:
+        """HTTP debug status - controls whether sensitive HTTP data is logged
+        
+        :param value: The HTTP debug status, True or False.
+        :type: bool
+        """
+        self.__http_debug = value
+        if value:
+            # Enable HTTP connection debug level
+            httplib.HTTPConnection.debuglevel = 1
+            # Warn about security implications if not already in debug mode
+            if not self.__debug:
+                for _, logger in self.logger.items():
+                    logger.warning(
+                        "HTTP debug mode is enabled. This will log HTTP requests and responses "
+                        "which may contain sensitive information such as API keys and credentials. "
+                        "It is not recommended for production environments."
+                    )
+        else:
+            # Disable HTTP connection debug level
             httplib.HTTPConnection.debuglevel = 0
 
     @property
