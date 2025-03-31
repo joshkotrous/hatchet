@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from hatchet_sdk import Context, Hatchet, TriggerWorkflowOptions
 
@@ -12,7 +12,7 @@ hatchet = Hatchet(debug=True)
 
 
 class ParentInput(BaseModel):
-    n: int = 100
+    n: int = Field(default=100, ge=1, le=1000)  # Set reasonable min/max bounds
 
 
 class ChildInput(BaseModel):
