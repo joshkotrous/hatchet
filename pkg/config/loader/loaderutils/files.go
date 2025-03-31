@@ -3,13 +3,17 @@ package loaderutils
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 func GetConfigBytes(configFilePath string) ([][]byte, error) {
 	configFileBytes := make([][]byte, 0)
 
-	if fileExists(configFilePath) {
-		fileBytes, err := os.ReadFile(configFilePath) // #nosec G304 -- config files are meant to be read from user-supplied directory
+	// Clean the path to normalize it and remove potential directory traversal
+	safePath := filepath.Clean(configFilePath)
+
+	if fileExists(safePath) {
+		fileBytes, err := os.ReadFile(safePath) // #nosec G304 -- config files are meant to be read from user-supplied directory
 
 		if err != nil {
 			return nil, fmt.Errorf("could not read config file at path %s: %w", configFilePath, err)
@@ -22,8 +26,11 @@ func GetConfigBytes(configFilePath string) ([][]byte, error) {
 }
 
 func GetFileBytes(filename string) ([]byte, error) {
-	if fileExists(filename) {
-		fileBytes, err := os.ReadFile(filename) // #nosec G304 -- config files are meant to be read from user-supplied directory
+	// Clean the path to normalize it and remove potential directory traversal
+	safePath := filepath.Clean(filename)
+
+	if fileExists(safePath) {
+		fileBytes, err := os.ReadFile(safePath) // #nosec G304 -- config files are meant to be read from user-supplied directory
 
 		if err != nil {
 			return nil, fmt.Errorf("could not read config file at path %s: %w", filename, err)
