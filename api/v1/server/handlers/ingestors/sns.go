@@ -12,32 +12,36 @@ import (
 	"github.com/hatchet-dev/hatchet/internal/integrations/ingestors/sns"
 )
 
+const (
+	MaxPayloadSize = 1 * 1024 * 1024 // 1MB
+)
+
 func (i *IngestorsService) SnsUpdate(ctx echo.Context, req gen.SnsUpdateRequestObject) (gen.SnsUpdateResponseObject, error) {
-	body, err := io.ReadAll(ctx.Request().Body)
+	// Read only up to MaxPayloadSize to prevent DoS attacks
+	body, err := io.ReadAll(io.LimitReader(ctx.Request().Body, MaxPayloadSize))
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read request body: %w", err)
 	}
 
 	payload := &sns.Payload{}
 
 	err = json.Unmarshal(body, payload)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal SNS payload: %w", err)
 	}
 
+	// Enhance error messages for better traceability
 	if err := payload.VerifyPayload(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("SNS payload verification failed: %w", err)
 	}
 
 	tenantId := req.Tenant.String()
 
 	// verify that the tenant and the topic ARN are set in the database
 	snsInt, err := i.config.APIRepository.SNS().GetSNSIntegration(ctx.Request().Context(), tenantId, payload.TopicArn)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get SNS integration: %w", err)
 	}
 
 	if snsInt == nil {
@@ -45,29 +49,25 @@ func (i *IngestorsService) SnsUpdate(ctx echo.Context, req gen.SnsUpdateRequestO
 	}
 
 	tenant, err := i.config.APIRepository.Tenant().GetTenantByID(ctx.Request().Context(), tenantId)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get tenant: %w", err)
 	}
 
 	switch payload.Type {
 	case "SubscriptionConfirmation":
 		_, err := payload.Subscribe()
-
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to subscribe: %w", err)
 		}
 	case "UnsubscribeConfirmation":
 		_, err := payload.Unsubscribe()
-
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to unsubscribe: %w", err)
 		}
 	default:
 		_, err := i.config.Ingestor.IngestEvent(ctx.Request().Context(), tenant, req.Event, body, nil)
-
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to ingest event: %w", err)
 		}
 	}
 
