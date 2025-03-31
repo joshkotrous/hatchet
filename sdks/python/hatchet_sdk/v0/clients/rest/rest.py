@@ -16,6 +16,7 @@ import io
 import json
 import re
 import ssl
+import warnings
 from typing import Optional, Union
 
 import aiohttp
@@ -64,6 +65,12 @@ class RESTClientObject:
             )
 
         if not configuration.verify_ssl:
+            warnings.warn(
+                "SSL certificate verification is disabled! This significantly reduces security "
+                "and exposes your application to man-in-the-middle attacks. Consider using "
+                "proper SSL certificates or setting verify_ssl=True in production environments.",
+                UserWarning, stacklevel=2
+            )
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
 
