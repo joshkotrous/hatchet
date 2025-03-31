@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,6 +15,20 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/postgres/sqlchelpers"
 	"github.com/hatchet-dev/hatchet/pkg/validator"
 )
+
+// Define valid ordering options
+var validOrderColumns = map[string]bool{
+	"key":        true,
+	"limit":      true,
+	"window":     true,
+	"created_at": true,
+	"updated_at": true,
+}
+
+var validOrderDirections = map[string]bool{
+	"ASC":  true,
+	"DESC": true,
+}
 
 type rateLimitEngineRepository struct {
 	pool    *pgxpool.Pool
@@ -67,11 +82,16 @@ func (r *rateLimitEngineRepository) ListRateLimits(ctx context.Context, tenantId
 	orderByDirection := "ASC"
 
 	if opts.OrderBy != nil {
-		orderByField = *opts.OrderBy
+		if validOrderColumns[*opts.OrderBy] {
+			orderByField = *opts.OrderBy
+		}
 	}
 
 	if opts.OrderDirection != nil {
-		orderByDirection = *opts.OrderDirection
+		upperDirection := strings.ToUpper(*opts.OrderDirection)
+		if validOrderDirections[upperDirection] {
+			orderByDirection = upperDirection
+		}
 	}
 
 	queryParams.Orderby = orderByField + " " + orderByDirection
