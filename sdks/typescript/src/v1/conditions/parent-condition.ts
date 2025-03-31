@@ -17,6 +17,36 @@ export interface Parent {
 }
 
 /**
+ * Validates a CEL (Common Expression Language) expression to ensure it doesn't contain potentially
+ * unsafe patterns. This is a basic validation that checks for common unsafe patterns.
+ * 
+ * @param expression The CEL expression to validate
+ * @returns true if the expression is considered safe, false otherwise
+ */
+function validateCELExpression(expression?: string): boolean {
+  if (!expression) return true;
+  
+  // Patterns that are considered unsafe in CEL expressions
+  const unsafePatterns = [
+    /\beval\s*\(/,                      // Prevent eval()
+    /\bFunction\s*\(/,                  // Prevent Function constructor
+    /\bnew\s+Function\s*\(/,            // Prevent new Function()
+    /\(.*\)\s*=>\s*{/,                  // Prevent arrow function with block body
+    /function\s*\(/,                    // Prevent function declarations
+    /\bimport\s*\(/,                    // Prevent dynamic imports
+    /\brequire\s*\(/,                   // Prevent require()
+    /__proto__/,                        // Prevent prototype manipulation
+    /\bprocess\b/,                      // Prevent Node.js process object
+    /\bdocument\b/,                     // Prevent DOM access
+    /\bwindow\b/,                       // Prevent window access
+    /\bglobal\b/,                       // Prevent global object access
+  ];
+  
+  // Check if the expression contains any unsafe patterns
+  return !unsafePatterns.some(pattern => pattern.test(expression));
+}
+
+/**
  * Represents a condition that is triggered based on a parent workflow task.
  * This condition monitors the specified parent task and evaluates
  * any provided expression against the task's data.
@@ -38,6 +68,7 @@ export class ParentCondition extends Condition {
    *
    * @param parent The parent workflow task this condition is associated with
    * @param expression Optional CEL expression to evaluate against the parent task's data
+   * @param readableDataKey Optional key to access data from the parent task
    * @param action Optional action to execute when the condition is met
    */
   constructor(
@@ -46,6 +77,11 @@ export class ParentCondition extends Condition {
     readableDataKey?: string,
     action?: Action
   ) {
+    // Validate the CEL expression for potentially unsafe patterns
+    if (expression && !validateCELExpression(expression)) {
+      throw new Error('Invalid CEL expression: The expression contains potentially unsafe patterns');
+    }
+
     super({
       readableDataKey: readableDataKey || `parent-${parent.name || Date.now().toString()}`,
       action,
