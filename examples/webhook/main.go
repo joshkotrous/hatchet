@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/joho/godotenv"
 
@@ -23,12 +24,14 @@ type output struct {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		panic(err)
+		log.Println("Failed to load environment variables")
+		os.Exit(1)
 	}
 
 	c, err := client.New()
 	if err != nil {
-		panic(fmt.Errorf("error creating client: %w", err))
+		log.Println("Failed to initialize client")
+		os.Exit(1)
 	}
 
 	w, err := worker.NewWorker(
@@ -37,7 +40,8 @@ func main() {
 		),
 	)
 	if err != nil {
-		panic(fmt.Errorf("error creating worker: %w", err))
+		log.Println("Failed to initialize worker")
+		os.Exit(1)
 	}
 
 	workflow := "webhook"
@@ -61,12 +65,20 @@ func main() {
 		},
 	}
 
+	// Get webhook secret from environment variable
+	webhookSecret := os.Getenv("WEBHOOK_SECRET")
+	if webhookSecret == "" {
+		log.Println("WEBHOOK_SECRET environment variable is required but not set")
+		os.Exit(1)
+	}
+
 	handler := w.WebhookHttpHandler(worker.WebhookHandlerOptions{
-		Secret: "secret",
+		Secret: webhookSecret,
 	}, wf)
 	port := "8741"
 	err = run("webhook-demo", w, port, handler, c, workflow, event)
 	if err != nil {
-		panic(err)
+		log.Println("Failed to run webhook demo")
+		os.Exit(1)
 	}
 }
