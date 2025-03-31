@@ -38,7 +38,7 @@ func (w *Worker) WebhookHttpHandler(opts WebhookHandlerOptions, workflows ...wor
 		if err != nil {
 			w.l.Error().Err(err).Msg("error reading body")
 			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(err.Error()))
+			_, _ = writer.Write([]byte("Failed to read request body"))
 			return
 		}
 
@@ -47,14 +47,14 @@ func (w *Worker) WebhookHttpHandler(opts WebhookHandlerOptions, workflows ...wor
 		if err != nil {
 			w.l.Error().Err(err).Msg("error signing request")
 			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(err.Error()))
+			_, _ = writer.Write([]byte("Failed to verify request signature"))
 			return
 		}
 
 		if expected != actual {
 			w.l.Error().Err(fmt.Errorf("expected signature %s, got %s", expected, actual)).Msg("error in request signature")
-			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte("wrong signature"))
+			writer.WriteHeader(http.StatusUnauthorized)
+			_, _ = writer.Write([]byte("Invalid request signature"))
 			return
 		}
 
@@ -64,7 +64,7 @@ func (w *Worker) WebhookHttpHandler(opts WebhookHandlerOptions, workflows ...wor
 				if err != nil {
 					w.l.Error().Err(err).Msg("error registering workflow")
 					writer.WriteHeader(http.StatusInternalServerError)
-					_, _ = writer.Write([]byte(err.Error()))
+					_, _ = writer.Write([]byte("Failed to register workflow"))
 					return
 				}
 			}
@@ -79,7 +79,10 @@ func (w *Worker) WebhookHttpHandler(opts WebhookHandlerOptions, workflows ...wor
 			}
 			data, err := json.Marshal(res)
 			if err != nil {
-				panic(err)
+				w.l.Error().Err(err).Msg("error marshalling health check response")
+				writer.WriteHeader(http.StatusInternalServerError)
+				_, _ = writer.Write([]byte("Internal server error"))
+				return
 			}
 			writer.WriteHeader(http.StatusOK)
 			_, _ = writer.Write(data)
@@ -89,8 +92,8 @@ func (w *Worker) WebhookHttpHandler(opts WebhookHandlerOptions, workflows ...wor
 		var action ActionPayload
 		if err := json.Unmarshal(data, &action); err != nil {
 			w.l.Error().Err(err).Msg("error unmarshalling action")
-			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(err.Error()))
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte("Invalid request format"))
 			return
 		}
 
@@ -108,7 +111,7 @@ func (w *Worker) WebhookHttpHandler(opts WebhookHandlerOptions, workflows ...wor
 		if err != nil {
 			w.l.Error().Err(err).Msg("error dispatching event")
 			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(err.Error()))
+			_, _ = writer.Write([]byte("Failed to dispatch action event"))
 			return
 		}
 
@@ -116,7 +119,7 @@ func (w *Worker) WebhookHttpHandler(opts WebhookHandlerOptions, workflows ...wor
 		if err != nil {
 			w.l.Error().Err(err).Msg("error creating context")
 			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(err.Error()))
+			_, _ = writer.Write([]byte("Failed to process action context"))
 			return
 		}
 		resp, err := w.webhookProcess(ctx)
@@ -124,7 +127,7 @@ func (w *Worker) WebhookHttpHandler(opts WebhookHandlerOptions, workflows ...wor
 			// FIXME handle error gracefully and send a failed event
 			w.l.Error().Err(err).Msg("error processing request")
 			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(err.Error()))
+			_, _ = writer.Write([]byte("Failed to process webhook"))
 			return
 		}
 
@@ -140,7 +143,7 @@ func (w *Worker) WebhookHttpHandler(opts WebhookHandlerOptions, workflows ...wor
 		if err != nil {
 			w.l.Error().Err(err).Msg("error dispatching event")
 			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(err.Error()))
+			_, _ = writer.Write([]byte("Failed to dispatch completion event"))
 			return
 		}
 
