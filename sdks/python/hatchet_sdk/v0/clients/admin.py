@@ -75,6 +75,20 @@ class DedupeViolationErr(Exception):
 class AdminClientBase:
     pooled_workflow_listener: PooledWorkflowRunListener | None = None
 
+    def _validate_metadata(self, metadata):
+        """
+        Validate that metadata conforms to Dict[str, str] type annotation.
+        Raises ValueError if metadata is invalid.
+        """
+        if not isinstance(metadata, dict):
+            raise ValueError(f"Additional metadata must be a dictionary, found {type(metadata)}")
+        
+        for key, value in metadata.items():
+            if not isinstance(key, str):
+                raise ValueError(f"Metadata keys must be strings, found {type(key)}")
+            if not isinstance(value, str):
+                raise ValueError(f"Metadata values must be strings, found {type(value)}")
+
     def _prepare_workflow_request(
         self, workflow_name: str, input: any, options: TriggerWorkflowOptions = None
     ):
@@ -88,18 +102,24 @@ class AdminClientBase:
                     else options["additional_metadata"]
                 )
                 if meta is not None:
+                    # Validate additional_metadata conforms to Dict[str, str]
+                    self._validate_metadata(meta)
                     options = {
                         **options,
                         "additional_metadata": json.dumps(meta).encode("utf-8"),
                     }
             except json.JSONDecodeError as e:
-                raise ValueError(f"Error encoding payload: {e}")
+                raise ValueError(f"Error encoding metadata: {e}")
+            except ValueError as e:
+                if "metadata" not in str(e):
+                    raise ValueError(f"Invalid metadata: {e}")
+                raise  # Re-raise original ValueError if it's already about metadata
 
             return TriggerWorkflowRequest(
                 name=workflow_name, input=payload_data, **(options or {})
             )
         except json.JSONDecodeError as e:
-            raise ValueError(f"Error encoding payload: {e}")
+            raise ValueError(f"Error encoding input payload: {e}")
 
     def _prepare_put_workflow_request(
         self,
