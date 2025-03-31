@@ -1,5 +1,5 @@
 import asyncio
-import random
+import secrets  # Use secrets module for cryptographically secure random numbers
 
 from examples.bulk_fanout.worker import ParentInput, bulk_parent_wf
 from hatchet_sdk import Hatchet
@@ -13,7 +13,7 @@ async def main() -> None:
     # stream events for this workflow run.
 
     streamKey = "streamKey"
-    streamVal = f"sk-{random.randint(1, 100)}"
+    streamVal = f"sk-{secrets.randbelow(100) + 1}"  # Cryptographically secure random number
 
     # Specify the stream key as additional metadata
     # when running the workflow.
