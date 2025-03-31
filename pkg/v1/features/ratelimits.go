@@ -3,6 +3,7 @@ package features
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	v0Client "github.com/hatchet-dev/hatchet/pkg/client"
@@ -41,14 +42,21 @@ func NewRateLimitsClient(
 	api *rest.ClientWithResponses,
 	tenantId *string,
 	admin *v0Client.AdminClient,
-) RateLimitsClient {
-	tenantIdUUid := uuid.MustParse(*tenantId)
+) (RateLimitsClient, error) {
+	if tenantId == nil {
+		return nil, fmt.Errorf("tenantId cannot be nil")
+	}
+	
+	tenantIdUUid, err := uuid.Parse(*tenantId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid UUID format for tenantId: %w", err)
+	}
 
 	return &rlClientImpl{
 		api:      api,
 		tenantId: tenantIdUUid,
 		admin:    admin,
-	}
+	}, nil
 }
 
 // upsert creates or updates a rate limit with the provided options.
