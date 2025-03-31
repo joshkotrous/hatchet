@@ -37,7 +37,11 @@ func (t *WorkerService) workerListV0(ctx echo.Context, tenant *dbsqlc.Tenant, re
 	})
 
 	if err != nil {
-		return nil, err
+		// Log the detailed error internally
+		fmt.Printf("Error listing workers for tenant %s: %v\n", tenantId, err)
+		
+		// Return a generic error to the client
+		return nil, fmt.Errorf("failed to retrieve worker list")
 	}
 
 	rows := make([]gen.Worker, len(workers))
@@ -66,7 +70,11 @@ func (t *WorkerService) workerListV1(ctx echo.Context, tenant *dbsqlc.Tenant, re
 	})
 
 	if err != nil {
-		return nil, err
+		// Log the detailed error internally
+		fmt.Printf("Error listing workers for tenant %s: %v\n", tenantId, err)
+		
+		// Return a generic error to the client
+		return nil, fmt.Errorf("failed to retrieve worker list")
 	}
 
 	rows := make([]gen.Worker, len(workers))
