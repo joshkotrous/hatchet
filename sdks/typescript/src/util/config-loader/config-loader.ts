@@ -121,11 +121,27 @@ export class ConfigLoader {
 
   static loadYamlConfig(path?: string): ClientConfig | undefined {
     try {
-      const configFile = readFileSync(
-        p.join(__dirname, path ?? this.default_yaml_config_path),
-        'utf8'
-      );
-
+      let configPath;
+      
+      if (path) {
+        // Sanitize the path to prevent path traversal
+        if (path.includes('..') || path.startsWith('/') || path.includes(':\\') || path.includes(':/')) {
+          throw new Error('Invalid path: Path traversal attempts are not allowed');
+        }
+        
+        // Join with __dirname and normalize
+        configPath = p.normalize(p.join(__dirname, path));
+        
+        // Ensure the path is within the expected directory
+        if (!configPath.startsWith(p.normalize(__dirname))) {
+          throw new Error('Invalid path: Path must be within the application directory');
+        }
+      } else {
+        // Use the default path
+        configPath = this.default_yaml_config_path;
+      }
+      
+      const configFile = readFileSync(configPath, 'utf8');
       const config = parse(configFile);
 
       ClientConfigSchema.partial().parse(config);
